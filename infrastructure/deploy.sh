@@ -298,11 +298,11 @@ az containerapp create \
   --name "$CONTAINER_APP" \
   --resource-group "$RESOURCE_GROUP" \
   --environment "$CONTAINER_ENV" \
-  --image "ghcr.io/dsanchor/email-analyzer/email-analyzer-web:latest" \
+  --image "ghcr.io/dsanchor/email-analizer/email-analyzer-web:main-4f36a46" \
   --target-port 8000 \
   --ingress external \
-  --min-replicas 0 \
-  --max-replicas 3 \
+  --min-replicas 1 \
+  --max-replicas 1 \
   --system-assigned \
   --env-vars \
     "COSMOS_ENDPOINT=${COSMOS_ENDPOINT}" \
