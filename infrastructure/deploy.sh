@@ -118,8 +118,8 @@ az resource create \
   --output none
 
 # Azure Blob Storage connection (managed identity)
-# MI auth is declared in the Logic App's $connections block, not here.
-# This matches the Cosmos DB connection pattern (which works).
+# The azureblob connector requires parameterValueSet to enable MI auth.
+# Without this, the Logic App rejects connectionProperties.authentication.type = ManagedServiceIdentity.
 echo "  ▸ Azure Blob Storage connection (managed identity)..."
 az resource create \
   --resource-group "$RESOURCE_GROUP" \
@@ -130,7 +130,11 @@ az resource create \
     \"api\": {
       \"id\": \"/subscriptions/$SUBSCRIPTION_ID/providers/Microsoft.Web/locations/$LOCATION/managedApis/azureblob\"
     },
-    \"displayName\": \"Azure Blob Storage - Email Analyzer\"
+    \"displayName\": \"Azure Blob Storage - Email Analyzer\",
+    \"parameterValueSet\": {
+      \"name\": \"managedIdentityAuth\",
+      \"values\": {}
+    }
   }" \
   --output none
 
