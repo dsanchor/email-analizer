@@ -225,7 +225,8 @@
       },
       "runAfter": {
         "For_Each_Attachment": [
-          "Succeeded"
+          "Succeeded",
+          "Failed"
         ]
       }
     }
