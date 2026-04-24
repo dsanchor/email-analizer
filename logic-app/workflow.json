@@ -39,11 +39,6 @@
           }
         }
       },
-      "conditions": [
-        {
-          "expression": "@startsWith(triggerBody()?['subject'], 'Demo email')"
-        }
-      ],
       "splitOn": "@triggerBody()?['value']"
     }
   },
