@@ -1,0 +1,14 @@
+{
+  "name": "email-parser-tests",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Tests for email-parser web app (Express + React)",
+  "scripts": {
+    "test": "jest --verbose",
+    "test:coverage": "jest --coverage --verbose"
+  },
+  "devDependencies": {
+    "jest": "^29.7.0",
+    "supertest": "^6.3.3"
+  }
+}

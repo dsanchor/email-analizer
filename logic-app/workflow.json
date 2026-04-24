@@ -1,0 +1,239 @@
+{
+  "$schema": "https://schema.management.azure.com/providers/Microsoft.Logic/schemas/2016-06-01/workflowdefinition.json#",
+  "contentVersion": "1.0.0.0",
+  "triggers": {
+    "When_a_new_email_arrives_(V3)": {
+      "type": "ApiConnectionNotification",
+      "inputs": {
+        "host": {
+          "connection": {
+            "name": "@parameters('$connections')['office365']['connectionId']"
+          }
+        },
+        "fetch": {
+          "pathTemplate": {
+            "template": "/v3/Mail/OnNewEmail"
+          },
+          "method": "get",
+          "queries": {
+            "importance": "Any",
+            "fetchOnlyWithAttachment": false,
+            "includeAttachments": true,
+            "folderPath": "Inbox",
+            "subjectFilter": "Demo email"
+          }
+        },
+        "subscribe": {
+          "body": {
+            "NotificationUrl": "@{listCallbackUrl()}"
+          },
+          "pathTemplate": {
+            "template": "/GraphMailSubscriptionPoke/$subscriptions"
+          },
+          "method": "post",
+          "queries": {
+            "importance": "Any",
+            "fetchOnlyWithAttachment": false,
+            "folderPath": "Inbox",
+            "subjectFilter": "Demo email"
+          }
+        }
+      },
+      "conditions": [
+        {
+          "expression": "@startsWith(triggerBody()?['subject'], 'Demo email')"
+        }
+      ],
+      "splitOn": "@triggerBody()?['value']"
+    }
+  },
+  "actions": {
+    "Initialize_Attachments_Array": {
+      "type": "InitializeVariable",
+      "inputs": {
+        "variables": [
+          {
+            "name": "attachments",
+            "type": "array",
+            "value": []
+          }
+        ]
+      },
+      "runAfter": {}
+    },
+    "For_Each_Attachment": {
+      "type": "Foreach",
+      "foreach": "@triggerBody()?['attachments']",
+      "actions": {
+        "Get_Attachment_(V2)": {
+          "type": "ApiConnection",
+          "inputs": {
+            "host": {
+              "connection": {
+                "name": "@parameters('$connections')['office365']['connectionId']"
+              }
+            },
+            "method": "get",
+            "path": "/codeless/v1.0/me/messages/@{encodeURIComponent(triggerBody()?['id'])}/attachments/@{encodeURIComponent(items('For_Each_Attachment')?['id'])}"
+          }
+        },
+        "Create_Blob": {
+          "type": "ApiConnection",
+          "inputs": {
+            "host": {
+              "connection": {
+                "name": "@parameters('$connections')['azureblob']['connectionId']"
+              }
+            },
+            "method": "post",
+            "body": "@base64ToBinary(body('Get_Attachment_(V2)')?['contentBytes'])",
+            "path": "/v2/datasets/@{encodeURIComponent(encodeURIComponent('__STORAGE_ACCOUNT__'))}/files",
+            "queries": {
+              "folderPath": "/email-attachments/@{encodeURIComponent(triggerBody()?['id'])}",
+              "name": "@body('Get_Attachment_(V2)')?['name']",
+              "queryParametersSingleEncoded": true
+            }
+          },
+          "runAfter": {
+            "Get_Attachment_(V2)": [
+              "Succeeded"
+            ]
+          }
+        },
+        "Check_If_PDF": {
+          "type": "If",
+          "expression": {
+            "or": [
+              {
+                "contains": [
+                  "@toLower(body('Get_Attachment_(V2)')?['contentType'])",
+                  "pdf"
+                ]
+              },
+              {
+                "endsWith": [
+                  "@toLower(body('Get_Attachment_(V2)')?['name'])",
+                  ".pdf"
+                ]
+              }
+            ]
+          },
+          "actions": {
+            "Call_Content_Understanding_API": {
+              "type": "Http",
+              "inputs": {
+                "method": "POST",
+                "uri": "__CONTENT_UNDERSTANDING_ENDPOINT__/contentunderstanding/analyzers/__CONTENT_UNDERSTANDING_ANALYZER_ID__:analyze?api-version=2025-11-01",
+                "headers": {
+                  "Content-Type": "application/json"
+                },
+                "body": {
+                  "inputs": [
+                    {
+                      "content": "@{body('Get_Attachment_(V2)')?['contentBytes']}",
+                      "mimeType": "application/pdf"
+                    }
+                  ]
+                },
+                "authentication": {
+                  "type": "ManagedServiceIdentity",
+                  "audience": "https://cognitiveservices.azure.com/"
+                }
+              }
+            },
+            "Append_PDF_Attachment_With_Analysis": {
+              "type": "AppendToArrayVariable",
+              "inputs": {
+                "name": "attachments",
+                "value": {
+                  "name": "@body('Get_Attachment_(V2)')?['name']",
+                  "contentType": "@body('Get_Attachment_(V2)')?['contentType']",
+                  "size": "@body('Get_Attachment_(V2)')?['size']",
+                  "blobPath": "email-attachments/@{encodeURIComponent(triggerBody()?['id'])}/@{body('Get_Attachment_(V2)')?['name']}",
+                  "contentUnderstanding": "@body('Call_Content_Understanding_API')"
+                }
+              },
+              "runAfter": {
+                "Call_Content_Understanding_API": [
+                  "Succeeded"
+                ]
+              }
+            }
+          },
+          "else": {
+            "actions": {
+              "Append_Non_PDF_Attachment": {
+                "type": "AppendToArrayVariable",
+                "inputs": {
+                  "name": "attachments",
+                  "value": {
+                    "name": "@body('Get_Attachment_(V2)')?['name']",
+                    "contentType": "@body('Get_Attachment_(V2)')?['contentType']",
+                    "size": "@body('Get_Attachment_(V2)')?['size']",
+                    "blobPath": "email-attachments/@{encodeURIComponent(triggerBody()?['id'])}/@{body('Get_Attachment_(V2)')?['name']}"
+                  }
+                }
+              }
+            }
+          },
+          "runAfter": {
+            "Create_Blob": [
+              "Succeeded"
+            ]
+          }
+        }
+      },
+      "runAfter": {
+        "Initialize_Attachments_Array": [
+          "Succeeded"
+        ]
+      },
+      "runtimeConfiguration": {
+        "concurrency": {
+          "repetitions": 1
+        }
+      }
+    },
+    "Create_or_Update_Cosmos_Document": {
+      "type": "ApiConnection",
+      "inputs": {
+        "host": {
+          "connection": {
+            "name": "@parameters('$connections')['cosmosdb']['connectionId']"
+          }
+        },
+        "method": "post",
+        "body": {
+          "id": "@{triggerBody()?['id']}",
+          "messageId": "@{coalesce(triggerBody()?['internetMessageId'], triggerBody()?['id'])}",
+          "subject": "@{triggerBody()?['subject']}",
+          "body": "@triggerBody()?['body']",
+          "bodyPreview": "@{triggerBody()?['bodyPreview']}",
+          "from": "@triggerBody()?['from']",
+          "toRecipients": "@triggerBody()?['toRecipients']",
+          "receivedDateTime": "@{triggerBody()?['receivedDateTime']}",
+          "hasAttachments": "@triggerBody()?['hasAttachments']",
+          "importance": "@{triggerBody()?['importance']}",
+          "conversationId": "@{triggerBody()?['conversationId']}",
+          "attachments": "@variables('attachments')",
+          "processedAt": "@{utcNow()}"
+        },
+        "path": "/v2/cosmosdb/@{encodeURIComponent('__COSMOS_ACCOUNT__')}/dbs/@{encodeURIComponent('email-parser-db')}/colls/@{encodeURIComponent('emails')}/docs",
+        "headers": {
+          "x-ms-documentdb-is-upsert": "True"
+        }
+      },
+      "runAfter": {
+        "For_Each_Attachment": [
+          "Succeeded"
+        ]
+      }
+    }
+  },
+  "parameters": {
+    "$connections": {
+      "defaultValue": {},
+      "type": "Object"
+    }
+  }
+}

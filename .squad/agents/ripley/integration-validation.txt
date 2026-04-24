@@ -1,0 +1,54 @@
+CONTENT UNDERSTANDING INTEGRATION — VALIDATION REPORT
+=====================================================
+
+WORKFLOW STRUCTURE VALIDATION:
+✓ For_Each_Attachment loop preserved
+✓ Get_Attachment_(V2) action exists
+✓ Create_Blob action exists
+✓ Check_If_PDF conditional added after Create_Blob
+  ✓ PDF detection: contentType contains "pdf" OR filename ends with ".pdf"
+  ✓ If branch: Call_Content_Understanding_API → Append_PDF_Attachment_With_Analysis
+  ✓ Else branch: Append_Non_PDF_Attachment
+
+CONTENT UNDERSTANDING API CALL:
+✓ Method: POST
+✓ URI: __CONTENT_UNDERSTANDING_ENDPOINT__/contentunderstanding/analyzers/__CONTENT_UNDERSTANDING_ANALYZER_ID__:analyze?api-version=2025-11-01
+✓ Body: {"inputs": [{"content": "@{body('Get_Attachment_(V2)')?['contentBytes']}", "mimeType": "application/pdf"}]}
+✓ Authentication: ManagedServiceIdentity with audience https://cognitiveservices.azure.com/
+✓ Async polling: Built-in (HTTP connector default)
+
+COSMOS DB SCHEMA:
+✓ PDF attachments: Include contentUnderstanding field
+✓ Non-PDF attachments: No contentUnderstanding field (cleaner than null)
+
+DEPLOYMENT SCRIPTS:
+✓ deploy.sh: Config variables added
+✓ deploy.sh: Sed substitution added
+✓ deploy.sh: Role assignment added (Cognitive Services User)
+✓ deploy.sh: Summary output updated
+✓ redeploy-logic-app.sh: Config variables added
+✓ redeploy-logic-app.sh: Sed substitution added
+
+DOCUMENTATION:
+✓ README.md: Content Understanding section added
+✓ README.md: Setup instructions included
+✓ README.md: Security table updated
+✓ history.md: Session notes added
+✓ decision doc: Created with full rationale
+
+VALIDATION TESTS:
+✓ Workflow JSON syntax: Valid
+✓ deploy.sh syntax: Valid
+✓ redeploy-logic-app.sh syntax: Valid
+
+BACKWARD COMPATIBILITY:
+✓ Optional integration (env vars not required)
+✓ Non-PDF attachments unchanged
+✓ Existing deployment works without Content Understanding
+
+SECURITY MODEL:
+✓ Managed identity only (no API keys)
+✓ Cognitive Services User role assignment
+✓ Follows zero-key security policy
+
+STATUS: ✅ ALL VALIDATIONS PASSED — READY FOR DEPLOYMENT

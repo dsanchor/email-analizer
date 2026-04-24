@@ -1,0 +1,206 @@
+## Learnings
+
+- **Project:** email-parser — Azure Logic App email processing pipeline
+- **Stack:** Python, Azure (Logic Apps, Cosmos DB, Blob Storage, Container Apps), managed identities
+- **User:** dsanchor
+- **Reference:** https://github.com/glory-ub/PDF-Extraction-from-Mail-using-Logic-App
+
+### Session: Logic App Workflow & Deploy Script
+- Created `logic-app/workflow.json` — Stateful Logic App Standard workflow
+  - Uses splitOn on trigger (required by Office 365 V3 connector for per-message processing)
+  - Processes ALL attachment types (no PDF filter)
+  - Sequential attachment processing (concurrency: 1) to avoid variable race conditions
+  - Stores blobs at `/email-attachments/{emailId}/{filename}`
+  - Upserts to Cosmos DB with `x-ms-documentdb-is-upsert: True` header
+- Created `logic-app/connections.json` — API connections config
+  - Office 365: OAuth (requires interactive consent post-deploy)
+  - Blob Storage: ManagedServiceIdentity auth
+  - Cosmos DB: ManagedServiceIdentity auth (uses `documentdb` managed API)
+- Created `infrastructure/deploy.sh` — Full AZ CLI deployment script
+  - Cosmos DB: serverless, NoSQL API, partition key `/messageId`
+  - Logic App Standard on WS1 App Service Plan
+  - Container Apps with quickstart placeholder image
+  - API connections provisioned via `az resource create`
+  - Access policies grant Logic App MI access to API connections
+- **Cosmos DB Built-in Role IDs:**
+  - Data Reader: `00000000-0000-0000-0000-000000000001`
+  - Data Contributor: `00000000-0000-0000-0000-000000000002`
+- **Key files:** `logic-app/workflow.json`, `logic-app/connections.json`, `infrastructure/deploy.sh`
+
+### Session: ACR to GitHub Packages Migration
+- Replaced Azure Container Registry with GitHub Packages (ghcr.io) for container image hosting
+- Removed ACR provisioning from `infrastructure/deploy.sh`:
+  - Removed ACR_NAME config variable
+  - Removed `az acr create` command section
+  - Removed ACR_LOGIN_SERVER variable lookup
+  - Removed `--registry-server` flag from Container App create
+  - Removed AcrPull role assignment for Container App managed identity
+- Created `.github/workflows/build-push.yml` — automated Docker build pipeline
+  - Triggers on push to `main` when `web-app/` changes
+  - Also supports manual trigger via `workflow_dispatch`
+  - Builds from `web-app/Dockerfile`
+  - Pushes to `ghcr.io/${{ github.repository }}/email-parser-web`
+  - Tags with both `latest` and `<branch>-<sha>`
+  - Uses built-in `GITHUB_TOKEN` (no secrets needed)
+  - Requires `packages: write` and `contents: read` permissions
+- Updated documentation:
+  - `README.md`: Changed Quick Start step 4 to reference GH Actions workflow
+  - `docs/architecture.md`: Updated "Container Registry" references to "GitHub Packages (ghcr.io)"
+  - Updated Security Model section (removed ACR pull reference)
+  - Updated Deployment Architecture section with workflow details
+- **Rationale:** GitHub Packages is free for public repos, integrated with GH Actions, and eliminates one Azure resource to provision/maintain
+- **Key files affected:** `infrastructure/deploy.sh`, `.github/workflows/build-push.yml`, `README.md`, `docs/architecture.md`
+
+### Session: Logic App Standard → Consumption Migration
+- **Trigger:** Logic App Standard deployment failed because it requires storage account shared keys, and the user's policy mandates `--allow-shared-key-access false`
+- Rewrote `infrastructure/deploy.sh`:
+  - Removed App Service Plan (WS1) — Consumption doesn't need it
+  - Removed `APP_SERVICE_PLAN` config variable
+  - Removed `az logicapp create` / `az webapp identity assign` / `az webapp identity show` (Standard-specific commands)
+  - Added `az resource create --resource-type Microsoft.Logic/workflows` for Consumption Logic App
+  - Deploy script reads `logic-app/workflow.json` and injects it as the definition in the ARM resource body
+  - `$connections` parameters (office365, azureblob, cosmosdb) are populated with actual subscription/RG/connection IDs at deploy time
+  - System-assigned managed identity enabled via `az resource update --set identity`
+  - Changed `--allow-shared-key-access true` → `--allow-shared-key-access false` on storage account
+  - Moved API connection creation BEFORE Logic App creation (connections must exist for the workflow definition)
+  - Removed `az logicapp show` from summary; Logic App Consumption has no public URL
+- Rewrote `logic-app/workflow.json`:
+  - Removed `"kind": "Stateful"` wrapper (Consumption doesn't use kind)
+  - Changed from Standard format (wrapped in `definition` + `kind`) to bare workflow definition
+  - Changed connection references from `"referenceName"` to `"name": "@parameters('$connections')['<name>']['connectionId']"` (Consumption format)
+- Rewrote `logic-app/connections.json`:
+  - Replaced Standard `managedApiConnections` with `@appsetting()` references → reference-only doc
+  - File is now documentation only; Consumption Logic Apps don't use connections.json at runtime
+- Updated `README.md`: removed Logic App Standard references, removed separate workflow deploy step
+- Updated `docs/architecture.md`: changed all Standard/WS1/ASP references to Consumption
+- **Key pattern:** Consumption Logic Apps get their workflow definition + connections embedded in the ARM resource at deploy time, unlike Standard which uses separate deployment
+- **User policy:** Zero shared keys anywhere — storage account `--allow-shared-key-access false`
+- **Key files:** `infrastructure/deploy.sh`, `logic-app/workflow.json`, `logic-app/connections.json`, `README.md`, `docs/architecture.md`
+
+### Session: Logic App Recursive Input Nesting Fix
+- **Issue:** Run history showed infinite recursive `Inputs > value > Inputs > value...` nesting pattern
+- **Root cause:** Office 365 V3 connector's `body` field is an object `{ content: "...", contentType: "..." }`, not a string
+  - When referenced multiple times in workflow (Compose action + Cosmos action), Logic Apps run history tracking creates nested representations
+  - The `Compose_Email_Metadata` action was unused — it composed trigger body but was never referenced downstream
+- **Fix applied to `logic-app/workflow.json`:**
+  - Removed unused `Compose_Email_Metadata` action (reduced redundant trigger references)
+  - Changed Cosmos document body field from `@{triggerBody()?['body']}` → `@{triggerBody()?['body']?['content']}`
+  - Now extracts only the HTML/text string content instead of storing the entire object
+- **Impact:**
+  - Run history is now clean and readable
+  - Cosmos DB `body` field correctly stores HTML string (as originally intended)
+  - No web app changes needed — Lambert's templates already expected `body` to be a string
+  - Performance improvement from removing unused action step
+- **Prevention pattern:** Always access `triggerBody()?['body']?['content']` explicitly when using Office 365 V3 connector
+- **Key file:** `logic-app/workflow.json`
+- **Decision doc:** `.squad/decisions/inbox/ripley-logic-app-recursive-fix.md`
+
+### Session: Cosmos DB BadGateway Fix
+- **Issue:** `Create_or_Update_Cosmos_Document` action failing with 502 BadGateway
+- **Root causes identified:**
+  1. `from` field used string interpolation `@{triggerBody()?['from']}` on a complex object `{emailAddress: {name, address}}` — serializes to garbage, corrupts the Cosmos document body
+  2. `messageId` (partition key `/messageId`) used `@{triggerBody()?['internetMessageId']}` with no null fallback — empty partition key value causes BadGateway
+- **Fix applied to `logic-app/workflow.json`:**
+  - Changed `from` from `@{triggerBody()?['from']}` → `@triggerBody()?['from']` (no string interpolation — preserves JSON object)
+  - Changed `messageId` from `@{triggerBody()?['internetMessageId']}` → `@{coalesce(triggerBody()?['internetMessageId'], triggerBody()?['id'])}` (fallback to O365 ID if internetMessageId is null)
+- **Pattern:** In Logic App expressions, use `@expr` (no braces) for objects/arrays, use `@{expr}` only for string values. Mixing these up is a common BadGateway source.
+- **Key insight:** `toRecipients`, `hasAttachments`, and `attachments` were already correct (no string interpolation on non-string types)
+- **Key file:** `logic-app/workflow.json`
+- **Decision doc:** `.squad/decisions/inbox/ripley-cosmos-badgateway-fix.md`
+
+### Session: Logic App Workflow Redeploy Script
+- Created `infrastructure/redeploy-logic-app.sh` — focused script that ONLY redeploys the Logic App workflow definition
+  - Validates Logic App exists before attempting deploy (fail-fast with helpful error)
+  - Uses same config variables and naming conventions as `deploy.sh` (RESOURCE_GROUP, LOCATION, LOGIC_APP)
+  - Reads `logic-app/workflow.json` and deploys via `az rest --method PUT` (same ARM pattern as deploy.sh)
+  - Builds `$connections` parameters from subscription/RG IDs (office365, azureblob with MI, cosmosdb with MI)
+  - Preserves SystemAssigned managed identity (PUT is idempotent, won't rotate principal)
+  - Writes temp payload to `infrastructure/.redeploy-logic-app-payload.json` (not /tmp) and cleans up after
+  - Does NOT create any resources — no RG, Cosmos, Storage, Container App, or API connections
+- **Use case:** Quick workflow iteration — edit workflow.json, run redeploy, test in portal
+- **Key file:** `infrastructure/redeploy-logic-app.sh`
+
+### Session: Azure Blob Storage API Connection InternalServerError Fix
+- **Issue:** `az resource create` for the azureblob API connection returned InternalServerError every time
+- **Root causes:**
+  1. `accountName` is not a valid parameter for the `managedIdentityAuth` parameter value set — the correct key would be `storageAccount`, but MI auth needs no values at all
+  2. `az resource create` doesn't give explicit control over the ARM API version (`2016-06-01` required for `Microsoft.Web/connections`)
+- **Fix applied to `infrastructure/deploy.sh`:**
+  - Replaced `az resource create` with `az rest --method PUT` using explicit API version `2016-06-01`
+  - Changed `parameterValueSet.values` from `{ "accountName": { "value": "..." } }` to empty `{}`
+  - MI auth for blob is already handled at Logic App `$connections` level via `connectionProperties.authentication.type: ManagedServiceIdentity`
+  - Moved temp payload file from `/tmp/` to `$SCRIPT_DIR/.deploy-logic-app-payload.json` (consistent with redeploy script pattern)
+- **Pattern:** For `managedIdentityAuth` connections, the `parameterValueSet.values` should be empty — storage account targeting is handled by the workflow actions, not the connection resource
+- **`redeploy-logic-app.sh`:** No changes needed — it doesn't create API connections
+- **Key files:** `infrastructure/deploy.sh`, `.gitignore`
+
+### Session: API Connection Endpoint Resolution — AccountNameFromSettings Fix
+- **Issue:** Blob (Unauthorized) and Cosmos DB (502 BadGateway/timeout) actions failed because the managed API connectors couldn't resolve which account to target
+- **Root cause:** `workflow.json` used the literal placeholder `AccountNameFromSettings` in the action paths for both blob and Cosmos connectors. The connector uses the account name in the path (not the connection resource properties) to determine which account to authenticate against.
+- **Fix applied:**
+  1. `logic-app/workflow.json` — replaced `AccountNameFromSettings` with deploy-time placeholders:
+     - Blob path: `__STORAGE_ACCOUNT__`
+     - Cosmos path: `__COSMOS_ACCOUNT__`
+  2. `infrastructure/deploy.sh` — added sed substitution after reading workflow template to replace `__STORAGE_ACCOUNT__` → `$STORAGE_ACCOUNT` and `__COSMOS_ACCOUNT__` → `$COSMOS_ACCOUNT`
+  3. `infrastructure/redeploy-logic-app.sh` — added same sed substitution + added `COSMOS_ACCOUNT` and `STORAGE_ACCOUNT` config variables (previously missing)
+- **Pattern:** Managed API connectors (blob, cosmosdb) resolve target accounts from the ACTION PATH, not from the connection resource parameters. The connection resource just needs `api` + `displayName`; MI auth is declared in the `$connections` block. The actual account routing comes from the path: `/v2/cosmosdb/{accountName}/dbs/...` and `/v2/datasets/{storageAccount}/files`.
+- **Key insight:** `parameterValueSet` with `managedIdentityAuth` caused InternalServerError for blob; keeping connection resources minimal (api + displayName only) and relying on correct action paths is the safest pattern.
+- **Key files:** `logic-app/workflow.json`, `infrastructure/deploy.sh`, `infrastructure/redeploy-logic-app.sh`
+- **Decision doc:** `.squad/decisions/inbox/ripley-connection-endpoints.md`
+
+---
+
+### Cross-Team Update from Lambert (2026-04-20)
+
+**✅ UI REFRESH: Data Model Compatibility Solution**
+- **Change:** Lambert implemented Jinja2 template filters to handle polymorphic Cosmos DB field types
+- **What happened:** Your Logic App fix changed `from` field type from string to JSON object. Templates needed updates to handle both old and new formats transparently.
+- **Solution:** Added 5 template filters (`extract_from`, `extract_from_display`, `extract_from_initial`, `extract_body`, `extract_recipients`) that normalize field access across all templates
+- **Your Action:** No code changes needed in Logic App. Web app now handles both data formats transparently.
+- **Impact:** Frontend reliability — dashboard and detail pages render correctly with properly-typed Cosmos data
+- **New Feature:** Dashboard route added (`GET /dashboard`) with email statistics
+- **Test Status:** All 30 tests still passing (Lambert confirmed)
+
+### Session: Subject Filter Parameterization
+- **Change:** Made the email subject filter configurable via `SUBJECT_FILTER` env var with `__SUBJECT_FILTER__` placeholder
+- **Files modified:**
+  - `logic-app/workflow.json`: Replaced hardcoded `"Demo email"` with `__SUBJECT_FILTER__` in 3 places (fetch queries, subscribe queries, trigger condition)
+  - `infrastructure/deploy.sh`: Added `SUBJECT_FILTER` config var (default: `Demo email`), echo in config output, sed replacement on line 176
+  - `infrastructure/redeploy-logic-app.sh`: Same additions — config var, echo, sed replacement
+- **Pattern:** Follows existing `__STORAGE_ACCOUNT__` / `__COSMOS_ACCOUNT__` placeholder convention — plain string sed substitution at deploy time
+- **Usage:** Override at deploy time with `SUBJECT_FILTER="My custom prefix" ./infrastructure/deploy.sh`
+- **Key files:** `logic-app/workflow.json`, `infrastructure/deploy.sh`, `infrastructure/redeploy-logic-app.sh`
+
+### Session: Azure Content Understanding Integration
+- **Context:** Integrate Azure Content Understanding API to extract fields from PDF email attachments
+- **Changes made:**
+  1. **`logic-app/workflow.json`:** Added PDF detection and Content Understanding API call
+     - Replaced `Append_Attachment_Info` with conditional `Check_If_PDF` action
+     - For PDFs: calls Content Understanding API via HTTP action with managed identity auth
+     - HTTP action uses async pattern (automatic polling via Operation-Location header)
+     - Sends PDF content as base64 in request body (avoids blob storage access complexity)
+     - Stores analysis result in `contentUnderstanding` field of attachment object
+     - For non-PDFs: appends attachment info without analysis (original behavior)
+     - Uses placeholders `__CONTENT_UNDERSTANDING_ENDPOINT__` and `__CONTENT_UNDERSTANDING_ANALYZER_ID__`
+  2. **`infrastructure/deploy.sh`:** Added Content Understanding configuration
+     - New config variables: `CONTENT_UNDERSTANDING_ENDPOINT`, `CONTENT_UNDERSTANDING_ANALYZER_ID`, `CONTENT_UNDERSTANDING_RESOURCE_ID`
+     - Added sed substitution for placeholders (same pattern as storage/cosmos account names)
+     - Added role assignment: Logic App MI → `Cognitive Services User` on Content Understanding resource (if configured)
+     - Updated summary output to show Content Understanding configuration
+  3. **`infrastructure/redeploy-logic-app.sh`:** Same sed substitution and config variables
+  4. **`README.md`:** Documented Content Understanding integration
+     - Added section explaining the optional integration
+     - Documented setup steps (endpoint, analyzer ID, resource ID env vars)
+     - Updated security table with new role assignment
+     - Clarified that Content Understanding is an external service — users provision and configure it separately
+- **Architecture pattern:**
+  - Content Understanding is **optional** — if env vars not set, placeholders remain and PDFs are still processed (just without analysis)
+  - Uses managed identity auth with audience `https://cognitiveservices.azure.com/`
+  - Sends PDF content directly as base64 (avoids need for Content Understanding to access blob storage)
+  - Analysis result stored alongside attachment metadata in Cosmos DB
+  - HTTP action's built-in async polling handles the Operation-Location pattern automatically
+- **CosmosDB schema change:**
+  - PDF attachments now have `contentUnderstanding` field with analysis JSON
+  - Non-PDF attachments omit the field (cleaner than storing nulls)
+- **Key files:** `logic-app/workflow.json`, `infrastructure/deploy.sh`, `infrastructure/redeploy-logic-app.sh`, `README.md`
+- **Decision doc:** `.squad/decisions/inbox/ripley-content-understanding.md`

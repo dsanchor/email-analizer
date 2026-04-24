@@ -1,0 +1,15 @@
+# Squad: ignore runtime state (logs, inbox, sessions)
+.squad/orchestration-log/
+.squad/log/
+.squad/decisions/inbox/
+.squad/sessions/
+# Squad: SubSquad activation file (local to this machine)
+.squad-workstream
+__pycache__/
+# Node.js
+node_modules/
+web-app/dist/
+web-app/node_modules/
+# Temporary deploy payload files (generated and cleaned up by deploy scripts)
+infrastructure/.deploy-logic-app-payload.json
+infrastructure/.redeploy-logic-app-payload.json

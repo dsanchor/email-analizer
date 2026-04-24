@@ -1,0 +1,21 @@
+{
+  "_comment": "This file is for REFERENCE ONLY. Logic App Consumption does not use a connections.json file.",
+  "_note": "Connections are configured as $connections parameters in the workflow definition and injected by infrastructure/deploy.sh at deployment time via az resource create.",
+  "connections": {
+    "office365": {
+      "type": "Microsoft.Web/connections",
+      "managedApi": "office365",
+      "authentication": "OAuth2 (interactive consent required post-deploy)"
+    },
+    "azureblob": {
+      "type": "Microsoft.Web/connections",
+      "managedApi": "azureblob",
+      "authentication": "ManagedServiceIdentity"
+    },
+    "cosmosdb": {
+      "type": "Microsoft.Web/connections",
+      "managedApi": "documentdb",
+      "authentication": "ManagedServiceIdentity"
+    }
+  }
+}

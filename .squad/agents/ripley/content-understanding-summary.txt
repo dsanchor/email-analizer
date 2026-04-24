@@ -1,0 +1,66 @@
+CONTENT UNDERSTANDING INTEGRATION — SUMMARY
+===========================================
+
+TASK: Integrate Azure Content Understanding into Logic App workflow for PDF field extraction
+
+CHANGES MADE:
+
+1. logic-app/workflow.json
+   ✓ Replaced Append_Attachment_Info with Check_If_PDF conditional
+   ✓ Added PDF detection (contentType contains "pdf" OR filename ends with ".pdf")
+   ✓ Added Call_Content_Understanding_API HTTP action (POST with base64 content)
+   ✓ Added Append_PDF_Attachment_With_Analysis action (stores analysis in contentUnderstanding field)
+   ✓ Added Append_Non_PDF_Attachment action (preserves original behavior for non-PDFs)
+   ✓ Uses placeholders: __CONTENT_UNDERSTANDING_ENDPOINT__, __CONTENT_UNDERSTANDING_ANALYZER_ID__
+   ✓ Authentication: ManagedServiceIdentity with audience https://cognitiveservices.azure.com/
+
+2. infrastructure/deploy.sh
+   ✓ Added CONTENT_UNDERSTANDING_ENDPOINT config variable (optional)
+   ✓ Added CONTENT_UNDERSTANDING_ANALYZER_ID config variable (optional)
+   ✓ Added CONTENT_UNDERSTANDING_RESOURCE_ID config variable (optional)
+   ✓ Added sed substitution for Content Understanding placeholders
+   ✓ Added role assignment: Logic App MI → Cognitive Services User (if configured)
+   ✓ Updated config summary output
+
+3. infrastructure/redeploy-logic-app.sh
+   ✓ Added same config variables as deploy.sh
+   ✓ Added sed substitution for Content Understanding placeholders
+
+4. README.md
+   ✓ Added Content Understanding integration section
+   ✓ Documented setup steps with example environment variables
+   ✓ Updated security table with new role assignment
+   ✓ Clarified Content Understanding is external/optional
+
+5. .squad/agents/ripley/history.md
+   ✓ Added session notes with implementation details
+
+6. .squad/decisions/inbox/ripley-content-understanding.md
+   ✓ Created comprehensive decision document with rationale
+
+VALIDATION:
+✓ Workflow JSON syntax valid
+✓ deploy.sh syntax valid
+✓ redeploy-logic-app.sh syntax valid
+
+KEY DECISIONS:
+- Send PDF content as base64 (avoids blob storage access complexity)
+- Use HTTP action's built-in async polling (automatic Operation-Location handling)
+- Store analysis JSON in attachment object (no separate collection needed)
+- Optional integration via env vars (backward compatible)
+
+COSMOS DB SCHEMA:
+PDF attachments now have optional "contentUnderstanding" field
+Non-PDF attachments unchanged (field simply absent)
+
+DEPLOYMENT:
+# Without Content Understanding (original behavior)
+./infrastructure/deploy.sh
+
+# With Content Understanding
+export CONTENT_UNDERSTANDING_ENDPOINT="https://my-cu.services.ai.azure.com"
+export CONTENT_UNDERSTANDING_ANALYZER_ID="invoiceAnalyzer"
+export CONTENT_UNDERSTANDING_RESOURCE_ID="/subscriptions/.../providers/Microsoft.CognitiveServices/accounts/my-cu"
+./infrastructure/deploy.sh
+
+STATUS: ✅ Complete and ready for deployment
