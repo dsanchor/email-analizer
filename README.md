@@ -29,6 +29,12 @@ The Logic App triggers on new emails, extracts metadata, stores attachments in B
 # Log in to Azure
 az login
 
+# init Content Understanding variables
+export CONTENT_UNDERSTANDING_ENDPOINT="<cu_endpotin>"
+export CONTENT_UNDERSTANDING_ANALYZER_ID="<analizer_id"
+export CONTENT_UNDERSTANDING_RESOURCE_ID="/subscriptions/<sub>/resourceGroups/<rg>/providers/Microsoft.Cognitiv
+eServices/accounts/<name>"
+
 # Run the deployment script
 chmod +x infrastructure/deploy.sh
 ./infrastructure/deploy.sh
