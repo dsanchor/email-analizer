@@ -134,6 +134,47 @@
                   "type": "ManagedServiceIdentity",
                   "audience": "https://cognitiveservices.azure.com/"
                 }
+              },
+              "operationOptions": "DisableAsyncPattern"
+            },
+            "Until_Analysis_Complete": {
+              "type": "Until",
+              "expression": "@equals(body('Poll_Analysis_Status')?['status'], 'Succeeded')",
+              "limit": {
+                "count": 60,
+                "timeout": "PT10M"
+              },
+              "actions": {
+                "Poll_Analysis_Status": {
+                  "type": "Http",
+                  "inputs": {
+                    "method": "GET",
+                    "uri": "@{outputs('Call_Content_Understanding_API')['headers']['Operation-Location']}",
+                    "authentication": {
+                      "type": "ManagedServiceIdentity",
+                      "audience": "https://cognitiveservices.azure.com/"
+                    }
+                  }
+                },
+                "Delay_Between_Polls": {
+                  "type": "Wait",
+                  "inputs": {
+                    "interval": {
+                      "count": 5,
+                      "unit": "Second"
+                    }
+                  },
+                  "runAfter": {
+                    "Poll_Analysis_Status": [
+                      "Succeeded"
+                    ]
+                  }
+                }
+              },
+              "runAfter": {
+                "Call_Content_Understanding_API": [
+                  "Succeeded"
+                ]
               }
             },
             "Append_PDF_Attachment_With_Analysis": {
@@ -145,11 +186,11 @@
                   "contentType": "@body('Get_Attachment_(V2)')?['contentType']",
                   "size": "@body('Get_Attachment_(V2)')?['size']",
                   "blobPath": "email-attachments/@{encodeURIComponent(triggerBody()?['id'])}/@{body('Get_Attachment_(V2)')?['name']}",
-                  "contentUnderstanding": "@body('Call_Content_Understanding_API')"
+                  "contentUnderstanding": "@body('Poll_Analysis_Status')"
                 }
               },
               "runAfter": {
-                "Call_Content_Understanding_API": [
+                "Until_Analysis_Complete": [
                   "Succeeded"
                 ]
               }
