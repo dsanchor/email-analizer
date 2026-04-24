@@ -138,8 +138,9 @@ az resource create \
   }" \
   --output none
 
-# Cosmos DB connection (MI auth handled at Logic App $connections level)
-echo "  ▸ Cosmos DB connection..."
+# Cosmos DB connection (managed identity)
+# Like azureblob, the documentdb connector requires parameterValueSet to enable MI auth.
+echo "  ▸ Cosmos DB connection (managed identity)..."
 COSMOS_ENDPOINT=$(az cosmosdb show \
   --name "$COSMOS_ACCOUNT" \
   --resource-group "$RESOURCE_GROUP" \
@@ -156,7 +157,11 @@ az resource create \
     \"api\": {
       \"id\": \"/subscriptions/$SUBSCRIPTION_ID/providers/Microsoft.Web/locations/$LOCATION/managedApis/documentdb\"
     },
-    \"displayName\": \"Cosmos DB - Email Analyzer\"
+    \"displayName\": \"Cosmos DB - Email Analyzer\",
+    \"parameterValueSet\": {
+      \"name\": \"managedIdentityAuth\",
+      \"values\": {}
+    }
   }" \
   --output none
 
