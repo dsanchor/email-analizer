@@ -1,7 +1,7 @@
 # Kane — Tester
 
 ## Role
-Quality assurance and testing for the email-parser project.
+Quality assurance and testing for the email-analyzer project.
 
 ## Responsibilities
 - Write unit and integration tests for the Python web app

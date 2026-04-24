@@ -1,7 +1,7 @@
 # Dallas — Lead
 
 ## Role
-Lead architect and technical decision-maker for the email-parser project.
+Lead architect and technical decision-maker for the email-analyzer project.
 
 ## Responsibilities
 - Architecture decisions and system design

@@ -7,7 +7,7 @@
 **Date:** 2025-07-17 | **Status:** Approved
 
 #### Cosmos DB Schema
-- **Database:** `email-parser-db`, **Container:** `emails`, **Partition Key:** `/messageId`
+- **Database:** `email-analyzer-db`, **Container:** `emails`, **Partition Key:** `/messageId`
 - Serverless capacity mode — pay-per-request for bursty workloads
 - Attachments embedded as array to avoid cross-document joins
 - `bodyPreview` stored separately from `body` for fast list rendering
@@ -87,7 +87,7 @@ FastAPI + Jinja2 server-rendered app (no SPA framework). Containerized with pyth
 | Variable | Purpose | Default |
 |----------|---------|---------|
 | COSMOS_ENDPOINT | Cosmos DB URI | (required) |
-| COSMOS_DATABASE | Database name | email-parser-db |
+| COSMOS_DATABASE | Database name | email-analyzer-db |
 | COSMOS_CONTAINER | Container name | emails |
 | STORAGE_ACCOUNT_URL | Blob storage URI | (required) |
 | STORAGE_CONTAINER | Blob container name | email-attachments |
@@ -261,7 +261,7 @@ Polished frontend with branding removal, Inter font integration, and CSS micro-i
 
 #### Rationale
 
-1. **Branding removal:** "Email Parser · Powered by Azure" text is developer-facing and appears unfinished to users. Replaced with simple "Inbox" wordmark in nav; footer emptied.
+1. **Branding removal:** "Email Analyzer · Powered by Azure" text is developer-facing and appears unfinished to users. Replaced with simple "Inbox" wordmark in nav; footer emptied.
 2. **Inter font:** SF Pro is Apple-proprietary and only renders on macOS/iOS. Inter is the closest open-source match (same optical sizing philosophy, similar metrics). Added via Google Fonts `<link>` — no build step needed.
 3. **Micro-interactions:** Subtle hover transitions (blue tint, lift, opacity changes) make the UI feel responsive without animation overhead.
 4. **Polish details:** Zebra striping (very subtle), animated sort arrows, smooth scroll, CSS variables for consistency.

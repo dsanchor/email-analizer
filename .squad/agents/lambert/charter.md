@@ -1,7 +1,7 @@
 # Lambert — Frontend Dev
 
 ## Role
-Python web application developer and UI designer for the email-parser project.
+Python web application developer and UI designer for the email-analyzer project.
 
 ## Responsibilities
 - Python web app (Flask or FastAPI) to browse emails stored in Cosmos DB

@@ -1,6 +1,6 @@
 # Squad Team
 
-> email-parser — Azure Logic App email processing pipeline with Cosmos DB, Blob Storage, and a containerized Python web app on Azure Container Apps. Apple-inspired design. Managed identities throughout.
+> email-analyzer — Azure Logic App email processing pipeline with Cosmos DB, Blob Storage, and a containerized Python web app on Azure Container Apps. Apple-inspired design. Managed identities throughout.
 
 ## Coordinator
 
@@ -21,7 +21,7 @@
 
 ## Project Context
 
-- **Project:** email-parser
+- **Project:** email-analyzer
 - **User:** dsanchor
 - **Created:** 2026-04-20
 - **Stack:** Python, Azure (Logic Apps, Cosmos DB, Blob Storage, Container Apps), managed identities

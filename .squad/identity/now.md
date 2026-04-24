@@ -1,6 +1,6 @@
 ---
 updated_at: 2026-04-20T14:10:00Z
-focus_area: Email parser pipeline — team hired, implementation not started
+focus_area: Email analyzer pipeline — team hired, implementation not started
 active_issues: []
 ---
 

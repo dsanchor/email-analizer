@@ -1,4 +1,4 @@
-# Email Parser
+# Email Analyzer
 
 An Azure-native email processing pipeline that automatically captures incoming emails and their attachments, stores structured metadata in Cosmos DB, and serves everything through a beautiful Apple-inspired web interface.
 
@@ -59,7 +59,7 @@ git add web-app/
 git commit -m "Update web app"
 git push origin main
 
-# GitHub Actions will build and push ghcr.io/<owner>/<repo>/email-parser-web:latest
+# GitHub Actions will build and push ghcr.io/<owner>/<repo>/email-analyzer-web:latest
 ```
 
 **Option B: Manual Trigger**
@@ -70,17 +70,17 @@ Go to the **Actions** tab in GitHub, select **Build and Push Container Image**, 
 
 ```bash
 az containerapp update \
-  --resource-group email-parser-rg \
+  --resource-group email-analyzer-rg \
   --name <your-container-app-name> \
-  --image ghcr.io/<owner>/<repo>/email-parser-web:latest
+  --image ghcr.io/<owner>/<repo>/email-analyzer-web:latest
 ```
 
-> **Note:** Replace `<owner>/<repo>` with your GitHub repository path (e.g., `dsanchor/email-parser`).
+> **Note:** Replace `<owner>/<repo>` with your GitHub repository path (e.g., `dsanchor/email-analyzer`).
 
 ## Project Structure
 
 ```
-email-parser/
+email-analyzer/
 ├── README.md                    # This file
 ├── DESIGN.md                    # Apple-inspired design system
 ├── docs/
@@ -170,7 +170,7 @@ The web app requires these environment variables (set automatically by the deplo
 | Variable | Description | Example |
 |----------|-------------|---------|
 | `COSMOS_ENDPOINT` | Cosmos DB account URI | `https://ep-cosmos-xxx.documents.azure.com:443/` |
-| `COSMOS_DATABASE` | Database name | `email-parser-db` |
+| `COSMOS_DATABASE` | Database name | `email-analyzer-db` |
 | `COSMOS_CONTAINER` | Container name | `emails` |
 | `STORAGE_ACCOUNT_URL` | Blob Storage endpoint | `https://epstorxxx.blob.core.windows.net` |
 | `STORAGE_CONTAINER` | Blob container name | `email-attachments` |
@@ -199,7 +199,7 @@ npm install
 
 # Set environment variables
 export COSMOS_ENDPOINT="https://your-cosmos.documents.azure.com:443/"
-export COSMOS_DATABASE="email-parser-db"
+export COSMOS_DATABASE="email-analyzer-db"
 export COSMOS_CONTAINER="emails"
 export STORAGE_ACCOUNT_URL="https://yourstorage.blob.core.windows.net"
 export STORAGE_CONTAINER="email-attachments"

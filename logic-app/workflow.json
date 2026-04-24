@@ -218,7 +218,7 @@
           "attachments": "@variables('attachments')",
           "processedAt": "@{utcNow()}"
         },
-        "path": "/v2/cosmosdb/@{encodeURIComponent('__COSMOS_ACCOUNT__')}/dbs/@{encodeURIComponent('email-parser-db')}/colls/@{encodeURIComponent('emails')}/docs",
+        "path": "/v2/cosmosdb/@{encodeURIComponent('__COSMOS_ACCOUNT__')}/dbs/@{encodeURIComponent('email-analyzer-db')}/colls/@{encodeURIComponent('emails')}/docs",
         "headers": {
           "x-ms-documentdb-is-upsert": "True"
         }

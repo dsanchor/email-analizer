@@ -1,6 +1,6 @@
 ## Learnings
 
-- **Project:** email-parser — Azure Logic App email processing pipeline
+- **Project:** email-analyzer — Azure Logic App email processing pipeline
 - **Stack:** Python, Azure (Logic Apps, Cosmos DB, Blob Storage, Container Apps), managed identities
 - **User:** dsanchor
 - **Test suite:** 30 tests, all passing — covers all 5 routes + edge cases
@@ -61,8 +61,8 @@
 ### Known Constraints
 
 - `azure-cosmos` version constraint: `>=4.0.0` — v3 has incompatible API
-- Default storage account name in deploy.sh: `emailparserstor` (not `emailparserstorage`)
-- Default Cosmos database: `email-parser-db` (not `email-db`)
+- Default storage account name in deploy.sh: `emailanalyzerstor` (not `emailanalyzerstorage`)
+- Default Cosmos database: `email-analyzer-db` (not `email-db`)
 - Validation script aligned to actual deploy.sh defaults
 
 ---

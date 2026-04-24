@@ -1,4 +1,4 @@
-# Email Parser — Architecture
+# Email Analyzer — Architecture
 
 ## Solution Overview
 
@@ -61,7 +61,7 @@
 
 ## Cosmos DB Schema
 
-**Database:** `email-parser-db`
+**Database:** `email-analyzer-db`
 **Container:** `emails`
 **Partition Key:** `/messageId`
 
@@ -313,7 +313,7 @@ All service-to-service communication uses Azure Managed Identities. **Zero conne
 | Variable | Description | Example |
 |----------|-------------|---------|
 | `COSMOS_ENDPOINT` | Cosmos DB account endpoint | `https://ep-cosmos-xxx.documents.azure.com:443/` |
-| `COSMOS_DATABASE` | Database name | `email-parser-db` |
+| `COSMOS_DATABASE` | Database name | `email-analyzer-db` |
 | `COSMOS_CONTAINER` | Container name | `emails` |
 | `STORAGE_ACCOUNT_URL` | Blob Storage endpoint | `https://epstorxxx.blob.core.windows.net` |
 | `STORAGE_CONTAINER` | Blob container name | `email-attachments` |
@@ -360,7 +360,7 @@ All service-to-service communication uses Azure Managed Identities. **Zero conne
 │  .github/workflows/build-push.yml                                │
 │  ├── Triggered on push to main (web-app/ changes)               │
 │  ├── Build Docker image from web-app/Dockerfile                 │
-│  └── Push to ghcr.io/<owner>/<repo>/email-parser-web            │
+│  └── Push to ghcr.io/<owner>/<repo>/email-analyzer-web            │
 │                                                                  │
 │  Post-deploy (manual):                                           │
 │  ├── Configure O365 connector (interactive OAuth consent)        │
@@ -373,7 +373,7 @@ All service-to-service communication uses Azure Managed Identities. **Zero conne
 ## Project Structure
 
 ```
-email-parser/
+email-analyzer/
 ├── README.md                    # Project overview and setup guide
 ├── DESIGN.md                    # Apple-inspired design system
 ├── docs/

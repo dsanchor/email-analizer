@@ -1,5 +1,5 @@
 /**
- * Email Parser Web App — Express API server.
+ * Email Analyzer Web App — Express API server.
  * Serves React SPA in production, provides JSON API for Cosmos DB + Blob Storage.
  */
 
@@ -14,7 +14,7 @@ const sanitizeHtml = require("sanitize-html");
 // Configuration
 // ---------------------------------------------------------------------------
 const COSMOS_ENDPOINT = process.env.COSMOS_ENDPOINT || "";
-const COSMOS_DATABASE = process.env.COSMOS_DATABASE || "email-parser-db";
+const COSMOS_DATABASE = process.env.COSMOS_DATABASE || "email-analyzer-db";
 const COSMOS_CONTAINER = process.env.COSMOS_CONTAINER || "emails";
 const COSMOS_KEY = process.env.COSMOS_KEY || "";
 
@@ -206,7 +206,7 @@ app.get("*", (_req, res) => {
 // ---------------------------------------------------------------------------
 if (require.main === module) {
   app.listen(PORT, () => {
-    console.log(`Email Parser web app listening on port ${PORT}`);
+    console.log(`Email Analyzer web app listening on port ${PORT}`);
   });
 }
 

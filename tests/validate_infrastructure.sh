@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # =============================================================================
-# Infrastructure Validation Script for email-parser
+# Infrastructure Validation Script for email-analyzer
 #
 # Validates that all required Azure resources exist and are correctly
 # configured, including managed identity role assignments.
@@ -19,15 +19,15 @@ set -euo pipefail
 RESOURCE_GROUP="${1:?Usage: $0 <resource-group> [subscription-id]}"
 SUBSCRIPTION="${2:-$(az account show --query id -o tsv 2>/dev/null)}"
 
-COSMOS_ACCOUNT="${COSMOS_ACCOUNT:-email-parser-cosmos}"
-COSMOS_DATABASE="${COSMOS_DATABASE:-email-parser-db}"
+COSMOS_ACCOUNT="${COSMOS_ACCOUNT:-email-analyzer-cosmos}"
+COSMOS_DATABASE="${COSMOS_DATABASE:-email-analyzer-db}"
 COSMOS_CONTAINER="${COSMOS_CONTAINER:-emails}"
 
-STORAGE_ACCOUNT="${STORAGE_ACCOUNT:-emailparserstor}"
+STORAGE_ACCOUNT="${STORAGE_ACCOUNT:-emailanalyzerstor}"
 BLOB_CONTAINER="${BLOB_CONTAINER:-email-attachments}"
 
-LOGIC_APP="${LOGIC_APP:-email-parser-logic}"
-CONTAINER_APP="${CONTAINER_APP:-email-parser-app}"
+LOGIC_APP="${LOGIC_APP:-email-analyzer-logic}"
+CONTAINER_APP="${CONTAINER_APP:-email-analyzer-app}"
 
 PASS=0
 FAIL=0

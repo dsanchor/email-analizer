@@ -1,5 +1,5 @@
 /**
- * Route tests for email-parser Express web app.
+ * Route tests for email-analyzer Express web app.
  *
  * Equivalent to the Python test_app.py — 19 tests covering:
  *   GET /health           → health check
@@ -94,7 +94,7 @@ function getApp(emails = ALL_SAMPLE_EMAILS, blobShouldFail = false) {
 
   // Set env vars for server.js
   process.env.COSMOS_ENDPOINT = 'https://fake-cosmos.documents.azure.com:443/';
-  process.env.COSMOS_DATABASE = 'email-parser-db';
+  process.env.COSMOS_DATABASE = 'email-analyzer-db';
   process.env.COSMOS_CONTAINER = 'emails';
   process.env.STORAGE_ACCOUNT_URL = 'https://fakestorage.blob.core.windows.net';
   process.env.STORAGE_CONTAINER = 'email-attachments';

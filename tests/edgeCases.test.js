@@ -1,5 +1,5 @@
 /**
- * Edge case tests for email-parser Express web app.
+ * Edge case tests for email-analyzer Express web app.
  *
  * Equivalent to the Python test_edge_cases.py — 11 tests covering:
  *   Unicode/emoji subjects, XSS prevention, large attachments,
@@ -49,7 +49,7 @@ function getApp(emails = ALL_SAMPLE_EMAILS, blobShouldFail = false) {
   }));
 
   process.env.COSMOS_ENDPOINT = 'https://fake-cosmos.documents.azure.com:443/';
-  process.env.COSMOS_DATABASE = 'email-parser-db';
+  process.env.COSMOS_DATABASE = 'email-analyzer-db';
   process.env.COSMOS_CONTAINER = 'emails';
   process.env.STORAGE_ACCOUNT_URL = 'https://fakestorage.blob.core.windows.net';
   process.env.STORAGE_CONTAINER = 'email-attachments';

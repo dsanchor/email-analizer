@@ -1,7 +1,7 @@
 {
   "assignments": [
     {
-      "assignment_id": "email-parser-001",
+      "assignment_id": "email-analyzer-001",
       "universe": "Alien (1979)",
       "created_at": "2026-04-20T14:07:00Z",
       "agents": ["Dallas", "Ripley", "Lambert", "Kane"]

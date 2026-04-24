@@ -2,25 +2,25 @@
 set -euo pipefail
 
 ###############################################################################
-# Email Parser — Logic App Workflow Redeploy
+# Email Analyzer — Logic App Workflow Redeploy
 # Updates ONLY the Logic App workflow definition on an existing Consumption
 # Logic App. Does NOT create any resources (no RG, Cosmos, Storage, etc.).
 # Safe to run repeatedly — idempotent PUT to the ARM endpoint.
 ###############################################################################
 
 # ── Configuration (same variables as deploy.sh) ──────────────────────────────
-RESOURCE_GROUP="${RESOURCE_GROUP:-email-parser-rg}"
+RESOURCE_GROUP="${RESOURCE_GROUP:-email-analyzer-rg}"
 LOCATION="${LOCATION:-swedencentral}"
-LOGIC_APP="${LOGIC_APP:-email-parser-logic}"
-COSMOS_ACCOUNT="${COSMOS_ACCOUNT:-email-parser-cosmos}"
-STORAGE_ACCOUNT="${STORAGE_ACCOUNT:-emailparserstor}"
+LOGIC_APP="${LOGIC_APP:-email-analyzer-logic}"
+COSMOS_ACCOUNT="${COSMOS_ACCOUNT:-email-analyzer-cosmos}"
+STORAGE_ACCOUNT="${STORAGE_ACCOUNT:-emailanalyzerstor}"
 
 # Content Understanding (optional — set if integrating PDF analysis)
 CONTENT_UNDERSTANDING_ENDPOINT="${CONTENT_UNDERSTANDING_ENDPOINT:-}"
 CONTENT_UNDERSTANDING_ANALYZER_ID="${CONTENT_UNDERSTANDING_ANALYZER_ID:-}"
 
 echo "╔══════════════════════════════════════════════════════════════╗"
-echo "║  Email Parser — Logic App Workflow Redeploy                  ║"
+echo "║  Email Analyzer — Logic App Workflow Redeploy                  ║"
 echo "╚══════════════════════════════════════════════════════════════╝"
 echo ""
 echo "Config:"

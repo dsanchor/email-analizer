@@ -6,7 +6,7 @@
  */
 
 process.env.COSMOS_ENDPOINT = 'https://fake-cosmos.documents.azure.com:443/';
-process.env.COSMOS_DATABASE = 'email-parser-db';
+process.env.COSMOS_DATABASE = 'email-analyzer-db';
 process.env.COSMOS_CONTAINER = 'emails';
 process.env.STORAGE_ACCOUNT_URL = 'https://fakestorage.blob.core.windows.net';
 process.env.STORAGE_CONTAINER = 'email-attachments';

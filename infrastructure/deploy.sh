@@ -2,23 +2,23 @@
 set -euo pipefail
 
 ###############################################################################
-# Email Parser — Azure Infrastructure Deployment
+# Email Analyzer — Azure Infrastructure Deployment
 # Provisions: Resource Group, Cosmos DB, Storage, Logic App (Consumption),
 #             Container Apps, Managed Identity roles, API Connections
 # Security: Zero shared keys — all access via managed identity
 ###############################################################################
 
 # ── Configuration ────────────────────────────────────────────────────────────
-RESOURCE_GROUP="${RESOURCE_GROUP:-email-parser-rg}"
+RESOURCE_GROUP="${RESOURCE_GROUP:-email-analyzer-rg}"
 LOCATION="${LOCATION:-swedencentral}"
-COSMOS_ACCOUNT="${COSMOS_ACCOUNT:-email-parser-cosmos}"
-COSMOS_DB="email-parser-db"
+COSMOS_ACCOUNT="${COSMOS_ACCOUNT:-email-analyzer-cosmos}"
+COSMOS_DB="email-analyzer-db"
 COSMOS_CONTAINER="emails"
-STORAGE_ACCOUNT="${STORAGE_ACCOUNT:-emailparserstor}"
+STORAGE_ACCOUNT="${STORAGE_ACCOUNT:-emailanalyzerstor}"
 BLOB_CONTAINER="email-attachments"
-LOGIC_APP="${LOGIC_APP:-email-parser-logic}"
-CONTAINER_ENV="${CONTAINER_ENV:-email-parser-env}"
-CONTAINER_APP="${CONTAINER_APP:-email-parser-app}"
+LOGIC_APP="${LOGIC_APP:-email-analyzer-logic}"
+CONTAINER_ENV="${CONTAINER_ENV:-email-analyzer-env}"
+CONTAINER_APP="${CONTAINER_APP:-email-analyzer-app}"
 
 # Content Understanding (optional — set if integrating PDF analysis)
 CONTENT_UNDERSTANDING_ENDPOINT="${CONTENT_UNDERSTANDING_ENDPOINT:-}"
@@ -26,7 +26,7 @@ CONTENT_UNDERSTANDING_ANALYZER_ID="${CONTENT_UNDERSTANDING_ANALYZER_ID:-}"
 CONTENT_UNDERSTANDING_RESOURCE_ID="${CONTENT_UNDERSTANDING_RESOURCE_ID:-}"
 
 echo "╔══════════════════════════════════════════════════════════════╗"
-echo "║  Email Parser — Azure Infrastructure Deployment             ║"
+echo "║  Email Analyzer — Azure Infrastructure Deployment             ║"
 echo "╚══════════════════════════════════════════════════════════════╝"
 echo ""
 echo "Config:"
@@ -113,7 +113,7 @@ az resource create \
     \"api\": {
       \"id\": \"/subscriptions/$SUBSCRIPTION_ID/providers/Microsoft.Web/locations/$LOCATION/managedApis/office365\"
     },
-    \"displayName\": \"Office 365 - Email Parser\"
+    \"displayName\": \"Office 365 - Email Analyzer\"
   }" \
   --output none
 
@@ -130,7 +130,7 @@ az resource create \
     \"api\": {
       \"id\": \"/subscriptions/$SUBSCRIPTION_ID/providers/Microsoft.Web/locations/$LOCATION/managedApis/azureblob\"
     },
-    \"displayName\": \"Azure Blob Storage - Email Parser\"
+    \"displayName\": \"Azure Blob Storage - Email Analyzer\"
   }" \
   --output none
 
@@ -152,7 +152,7 @@ az resource create \
     \"api\": {
       \"id\": \"/subscriptions/$SUBSCRIPTION_ID/providers/Microsoft.Web/locations/$LOCATION/managedApis/documentdb\"
     },
-    \"displayName\": \"Cosmos DB - Email Parser\"
+    \"displayName\": \"Cosmos DB - Email Analyzer\"
   }" \
   --output none
 
@@ -289,7 +289,7 @@ az containerapp create \
   --name "$CONTAINER_APP" \
   --resource-group "$RESOURCE_GROUP" \
   --environment "$CONTAINER_ENV" \
-  --image "ghcr.io/dsanchor/email-parser/email-parser-web:latest" \
+  --image "ghcr.io/dsanchor/email-analyzer/email-analyzer-web:latest" \
   --target-port 8000 \
   --ingress external \
   --min-replicas 0 \
@@ -422,4 +422,4 @@ echo "  3. After GH Actions builds the image, update the Container App:"
 echo "     az containerapp update \\"
 echo "       --resource-group $RESOURCE_GROUP \\"
 echo "       --name $CONTAINER_APP \\"
-echo "       --image ghcr.io/<owner>/<repo>/email-parser-web:latest"
+echo "       --image ghcr.io/<owner>/<repo>/email-analyzer-web:latest"

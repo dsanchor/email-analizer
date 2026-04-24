@@ -1,6 +1,6 @@
 # Project Context
 
-- **Project:** email-parser
+- **Project:** email-analyzer
 - **Created:** 2026-04-20
 
 ## Core Context

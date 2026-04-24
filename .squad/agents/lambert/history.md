@@ -1,6 +1,6 @@
 ## Learnings
 
-- **Project:** email-parser — Azure Logic App email processing pipeline
+- **Project:** email-analyzer — Azure Logic App email processing pipeline
 - **Stack:** Python, Azure (Logic Apps, Cosmos DB, Blob Storage, Container Apps), managed identities
 - **Design:** Apple-inspired (DESIGN.md)
 - **User:** dsanchor
@@ -135,8 +135,8 @@
 - **Scope:** CSS overhaul + branding cleanup for premium look and feel
 - **Commit:** 8473f5c — "Lambert: Frontend polish — Inter font, branding cleanup, micro-interactions"
 - **Changes:**
-  - **Branding removed:** All "Email Parser", "Powered by Azure" text stripped from nav and footer. Nav brand is now just "Inbox". Footer is empty/invisible.
-  - **Titles cleaned:** All `<title>` tags no longer say "Email Parser" — just "Inbox", subject lines, or "Error {code}"
+  - **Branding removed:** All "Email Analyzer", "Powered by Azure" text stripped from nav and footer. Nav brand is now just "Inbox". Footer is empty/invisible.
+  - **Titles cleaned:** All `<title>` tags no longer say "Email Analyzer" — just "Inbox", subject lines, or "Error {code}"
   - **Inter font added:** Google Fonts Inter loaded as primary font (SF Pro substitute for non-Apple browsers). Font stack: `Inter, SF Pro Text/Display, Helvetica Neue, Arial, sans-serif`
   - **Search input:** Pill shape with `border-radius: 11px` per DESIGN.md, thicker focus ring, hover state on border, search icon turns blue on focus
   - **Table micro-interactions:** Subtle blue-tinted hover, zebra striping on even rows (`rgba(0,0,0,0.015)` — very subtle), attachment clip icon fades in on hover

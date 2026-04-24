@@ -1,7 +1,7 @@
 # Ripley — Cloud Dev
 
 ## Role
-Cloud infrastructure and Azure services developer for the email-parser project.
+Cloud infrastructure and Azure services developer for the email-analyzer project.
 
 ## Responsibilities
 - Azure Logic App workflow design and implementation
