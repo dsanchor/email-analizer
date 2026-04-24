@@ -125,7 +125,7 @@
                 "body": {
                   "inputs": [
                     {
-                      "content": "@{body('Get_Attachment_(V2)')?['contentBytes']}",
+                      "data": "@{body('Get_Attachment_(V2)')?['contentBytes']}",
                       "mimeType": "application/pdf"
                     }
                   ]
