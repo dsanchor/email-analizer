@@ -20,7 +20,7 @@ echo "▸ Enabling public network access on Cosmos DB ($COSMOS_ACCOUNT)..."
 az cosmosdb update \
   --name "$COSMOS_ACCOUNT" \
   --resource-group "$RESOURCE_GROUP" \
-  --enable-public-network true \
+  --enable-public-network True \
   --output none
 
 echo ""
