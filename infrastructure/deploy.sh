@@ -28,6 +28,7 @@ CONTENT_UNDERSTANDING_RESOURCE_ID="${CONTENT_UNDERSTANDING_RESOURCE_ID:-}"
 # Foundry Agent (optional — set if integrating email classification)
 FOUNDRY_AGENT_ENDPOINT="${FOUNDRY_AGENT_ENDPOINT:-}"
 FOUNDRY_AGENT_APP_NAME="${FOUNDRY_AGENT_APP_NAME:-}"
+FOUNDRY_RESOURCE_ID="${FOUNDRY_RESOURCE_ID:-}"
 
 echo "╔══════════════════════════════════════════════════════════════╗"
 echo "║  Email Analyzer — Azure Infrastructure Deployment             ║"
@@ -47,6 +48,7 @@ fi
 if [ -n "$FOUNDRY_AGENT_ENDPOINT" ]; then
   echo "  Foundry Agent:   $FOUNDRY_AGENT_ENDPOINT"
   echo "  Foundry App:     $FOUNDRY_AGENT_APP_NAME"
+  echo "  Foundry Resource ID: ${FOUNDRY_RESOURCE_ID:-(not set — MI role won't be assigned)}"
 fi
 echo ""
 
@@ -395,6 +397,17 @@ if [ -n "$CONTENT_UNDERSTANDING_RESOURCE_ID" ]; then
     --output none 2>/dev/null || echo "    (already assigned)"
 fi
 
+# Logic App MI → Cognitive Services User on Foundry project (if configured)
+if [ -n "$FOUNDRY_RESOURCE_ID" ]; then
+  echo "  ▸ Logic App → Cognitive Services User (Foundry Agent)..."
+  az role assignment create \
+    --assignee-object-id "$LOGIC_APP_PRINCIPAL_ID" \
+    --assignee-principal-type ServicePrincipal \
+    --role "Cognitive Services User" \
+    --scope "$FOUNDRY_RESOURCE_ID" \
+    --output none 2>/dev/null || echo "    (already assigned)"
+fi
+
 # ── Summary ──────────────────────────────────────────────────────────────────
 echo ""
 echo "╔══════════════════════════════════════════════════════════════╗"
@@ -425,6 +438,9 @@ echo "    → Storage Blob Data Contributor on $STORAGE_ACCOUNT"
 echo "    → Cosmos DB Built-in Data Contributor (00000000-0000-0000-0000-000000000002)"
 if [ -n "$CONTENT_UNDERSTANDING_RESOURCE_ID" ]; then
   echo "    → Cognitive Services User on Content Understanding resource"
+fi
+if [ -n "$FOUNDRY_RESOURCE_ID" ]; then
+  echo "    → Cognitive Services User on Foundry project (email classification)"
 fi
 echo "  Container App MI ($CONTAINER_APP_PRINCIPAL_ID):"
 echo "    → Storage Blob Data Reader on $STORAGE_ACCOUNT"
