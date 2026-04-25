@@ -52,7 +52,7 @@ After creation, set these variables when deploying the Logic App:
 |----------------------|-------|
 | `FOUNDRY_AGENT_ENDPOINT` | Same as `AZURE_AI_PROJECT_ENDPOINT` base URL (e.g. `https://<your-foundry-resource>.services.ai.azure.com`) |
 | `FOUNDRY_AGENT_APP_NAME` | The application name registered in Foundry (e.g. `EmailClassifierAgent`) |
-| `FOUNDRY_RESOURCE_ID` | Full Azure resource ID of the Foundry project (e.g. `/subscriptions/.../resourceGroups/.../providers/Microsoft.CognitiveServices/accounts/<name>`) — needed to assign the `Cognitive Services User` role to the Logic App's managed identity |
+| `FOUNDRY_RESOURCE_ID` | Full Azure resource ID of the Foundry project (e.g. `/subscriptions/.../resourceGroups/.../providers/Microsoft.CognitiveServices/accounts/<name>`) — needed to assign the `Azure AI User` role to the Logic App's managed identity |
 
 ### 2. Azure AI Content Understanding — PDF Analysis (Optional)
 
@@ -246,7 +246,7 @@ This solution uses **zero connection strings**. All service-to-service authentic
 | Logic App | Blob Storage | Storage Blob Data Contributor |
 | Logic App | Cosmos DB | Cosmos DB Built-in Data Contributor |
 | Logic App | Content Understanding (optional) | Cognitive Services User |
-| Logic App | Foundry AI project (optional) | Cognitive Services User |
+| Logic App | Foundry AI project (optional) | Azure AI User |
 | Container App | Blob Storage | Storage Blob Data Reader |
 | Container App | Cosmos DB | Cosmos DB Built-in Data Reader |
 

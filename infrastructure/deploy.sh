@@ -397,13 +397,13 @@ if [ -n "$CONTENT_UNDERSTANDING_RESOURCE_ID" ]; then
     --output none 2>/dev/null || echo "    (already assigned)"
 fi
 
-# Logic App MI → Cognitive Services User on Foundry project (if configured)
+# Logic App MI → Azure AI User on Foundry project (if configured)
 if [ -n "$FOUNDRY_RESOURCE_ID" ]; then
-  echo "  ▸ Logic App → Cognitive Services User (Foundry Agent)..."
+  echo "  ▸ Logic App → Azure AI User (Foundry Agent)..."
   az role assignment create \
     --assignee-object-id "$LOGIC_APP_PRINCIPAL_ID" \
     --assignee-principal-type ServicePrincipal \
-    --role "Cognitive Services User" \
+    --role "Azure AI User" \
     --scope "$FOUNDRY_RESOURCE_ID" \
     --output none 2>/dev/null || echo "    (already assigned)"
 fi
@@ -440,7 +440,7 @@ if [ -n "$CONTENT_UNDERSTANDING_RESOURCE_ID" ]; then
   echo "    → Cognitive Services User on Content Understanding resource"
 fi
 if [ -n "$FOUNDRY_RESOURCE_ID" ]; then
-  echo "    → Cognitive Services User on Foundry project (email classification)"
+  echo "    → Azure AI User on Foundry project (email classification)"
 fi
 echo "  Container App MI ($CONTAINER_APP_PRINCIPAL_ID):"
 echo "    → Storage Blob Data Reader on $STORAGE_ACCOUNT"
