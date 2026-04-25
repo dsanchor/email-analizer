@@ -48,6 +48,9 @@ The pipeline uses an Azure AI Foundry agent to classify each incoming email and 
 **Create the agent:**
 
 ```bash
+# Authenticate with Azure (required — the script uses DefaultAzureCredential)
+az login
+
 cd foundry-agent
 pip install -r requirements.txt
 
