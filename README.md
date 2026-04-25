@@ -20,6 +20,58 @@ The Logic App triggers on new emails, extracts metadata, stores attachments in B
 - **Azure CLI** (`az`) v2.50+ — [Install](https://learn.microsoft.com/en-us/cli/azure/install-azure-cli)
 - **Docker** — [Install](https://docs.docker.com/get-docker/)
 - **Node.js 20+** (for local development)
+- **Python 3.9+** (for Foundry agent provisioning)
+
+### 1. Azure AI Foundry — Email Classification Agent
+
+The pipeline uses an Azure AI Foundry agent to classify each incoming email and store the result in Cosmos DB. You must create this agent before deploying the Logic App.
+
+**Environment variables:**
+
+| Variable | Description |
+|----------|-------------|
+| `AZURE_AI_PROJECT_ENDPOINT` | Your Azure AI Foundry project endpoint (e.g. `https://<name>.services.ai.azure.com/api/projects/<project>`) |
+| `AZURE_AI_MODEL_DEPLOYMENT_NAME` | The model deployment to use (e.g. `gpt-4o`) |
+
+**Create the agent:**
+
+```bash
+cd foundry-agent
+pip install -r requirements.txt
+
+export AZURE_AI_PROJECT_ENDPOINT="https://<your-endpoint>.services.ai.azure.com/api/projects/<project>"
+export AZURE_AI_MODEL_DEPLOYMENT_NAME="gpt-4o"
+python create_classifier_agent.py
+```
+
+The script creates an **EmailClassifierAgent** in Foundry that analyzes email subject/body and returns a JSON classification: `{"type": "...", "score": N, "reasoning": "..."}`.
+
+After creation, set these variables when deploying the Logic App:
+
+| Deploy-time variable | Value |
+|----------------------|-------|
+| `FOUNDRY_AGENT_ENDPOINT` | Same as `AZURE_AI_PROJECT_ENDPOINT` base URL (e.g. `https://<your-foundry-resource>.services.ai.azure.com`) |
+| `FOUNDRY_AGENT_APP_NAME` | The application name registered in Foundry (e.g. `EmailClassifierAgent`) |
+
+### 2. Azure AI Content Understanding — PDF Analysis (Optional)
+
+The Logic App can call Azure Content Understanding to extract structured fields from PDF attachments. This is optional — emails are still processed without it.
+
+**Setup steps:**
+
+1. Deploy an **Azure AI Services / Content Understanding** resource in the [Azure Portal](https://portal.azure.com)
+2. Create and train an analyzer for your document types (e.g. invoices, claims)
+3. Set the following environment variables before deploying:
+
+| Variable | Description |
+|----------|-------------|
+| `CONTENT_UNDERSTANDING_ENDPOINT` | Content Understanding endpoint (e.g. `https://<name>.cognitiveservices.azure.com`) |
+| `CONTENT_UNDERSTANDING_ANALYZER_ID` | Your analyzer/classifier ID |
+| `CONTENT_UNDERSTANDING_RESOURCE_ID` | Full ARM resource ID (`/subscriptions/<sub>/resourceGroups/<rg>/providers/Microsoft.CognitiveServices/accounts/<name>`) |
+
+The deploy script grants the Logic App's managed identity `Cognitive Services User` role on the Content Understanding resource.
+
+> **Docs:** [Azure AI Content Understanding](https://learn.microsoft.com/en-us/azure/ai-services/content-understanding/overview)
 
 ## Quick Start
 
@@ -91,6 +143,9 @@ email-analyzer/
 ├── DESIGN.md                    # Apple-inspired design system
 ├── docs/
 │   └── architecture.md          # Full architecture documentation
+├── foundry-agent/
+│   ├── create_classifier_agent.py  # Provisions the Foundry classification agent
+│   └── requirements.txt         # Python dependencies
 ├── infrastructure/
 │   └── deploy.sh                # AZ CLI deployment (all resources)
 ├── logic-app/

@@ -230,6 +230,37 @@
         }
       }
     },
+    "Classify_Email": {
+      "type": "Http",
+      "inputs": {
+        "method": "POST",
+        "uri": "__FOUNDRY_AGENT_ENDPOINT__/api/projects/default/applications/__FOUNDRY_AGENT_APP_NAME__/protocols/openai/responses?api-version=2025-11-15-preview",
+        "headers": {
+          "Content-Type": "application/json"
+        },
+        "body": {
+          "input": "Subject: @{triggerBody()?['subject']}\n\nBody: @{triggerBody()?['bodyPreview']}"
+        },
+        "authentication": {
+          "type": "ManagedServiceIdentity",
+          "audience": "https://cognitiveservices.azure.com/"
+        }
+      },
+      "runAfter": {
+        "For_Each_Attachment": [
+          "Succeeded"
+        ]
+      }
+    },
+    "Parse_Classification": {
+      "type": "Compose",
+      "inputs": "@json(body('Classify_Email')?['output'][0]?['content'][0]?['text'])",
+      "runAfter": {
+        "Classify_Email": [
+          "Succeeded"
+        ]
+      }
+    },
     "Create_or_Update_Cosmos_Document": {
       "type": "ApiConnection",
       "inputs": {
@@ -252,6 +283,7 @@
           "importance": "@{triggerBody()?['importance']}",
           "conversationId": "@{triggerBody()?['conversationId']}",
           "attachments": "@variables('attachments')",
+          "classification": "@outputs('Parse_Classification')",
           "processedAt": "@{utcNow()}"
         },
         "path": "/v2/cosmosdb/@{encodeURIComponent('__COSMOS_ACCOUNT__')}/dbs/@{encodeURIComponent('email-analyzer-db')}/colls/@{encodeURIComponent('emails')}/docs",
@@ -263,6 +295,11 @@
         "For_Each_Attachment": [
           "Succeeded",
           "Failed"
+        ],
+        "Parse_Classification": [
+          "Succeeded",
+          "Failed",
+          "Skipped"
         ]
       }
     }

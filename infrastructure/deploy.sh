@@ -25,6 +25,10 @@ CONTENT_UNDERSTANDING_ENDPOINT="${CONTENT_UNDERSTANDING_ENDPOINT:-}"
 CONTENT_UNDERSTANDING_ANALYZER_ID="${CONTENT_UNDERSTANDING_ANALYZER_ID:-}"
 CONTENT_UNDERSTANDING_RESOURCE_ID="${CONTENT_UNDERSTANDING_RESOURCE_ID:-}"
 
+# Foundry Agent (optional — set if integrating email classification)
+FOUNDRY_AGENT_ENDPOINT="${FOUNDRY_AGENT_ENDPOINT:-}"
+FOUNDRY_AGENT_APP_NAME="${FOUNDRY_AGENT_APP_NAME:-}"
+
 echo "╔══════════════════════════════════════════════════════════════╗"
 echo "║  Email Analyzer — Azure Infrastructure Deployment             ║"
 echo "╚══════════════════════════════════════════════════════════════╝"
@@ -39,6 +43,10 @@ echo "  Container App:   $CONTAINER_APP"
 if [ -n "$CONTENT_UNDERSTANDING_ENDPOINT" ]; then
   echo "  Content Understanding: $CONTENT_UNDERSTANDING_ENDPOINT"
   echo "  CU Analyzer ID:  $CONTENT_UNDERSTANDING_ANALYZER_ID"
+fi
+if [ -n "$FOUNDRY_AGENT_ENDPOINT" ]; then
+  echo "  Foundry Agent:   $FOUNDRY_AGENT_ENDPOINT"
+  echo "  Foundry App:     $FOUNDRY_AGENT_APP_NAME"
 fi
 echo ""
 
@@ -194,6 +202,11 @@ WORKFLOW_DEFINITION=$(echo "$WORKFLOW_DEFINITION" | sed "s/__STORAGE_ACCOUNT__/$
 # Replace Content Understanding placeholders (if configured)
 if [ -n "$CONTENT_UNDERSTANDING_ENDPOINT" ]; then
   WORKFLOW_DEFINITION=$(echo "$WORKFLOW_DEFINITION" | sed "s|__CONTENT_UNDERSTANDING_ENDPOINT__|$CONTENT_UNDERSTANDING_ENDPOINT|g; s/__CONTENT_UNDERSTANDING_ANALYZER_ID__/$CONTENT_UNDERSTANDING_ANALYZER_ID/g")
+fi
+
+# Replace Foundry Agent placeholders (if configured)
+if [ -n "$FOUNDRY_AGENT_ENDPOINT" ]; then
+  WORKFLOW_DEFINITION=$(echo "$WORKFLOW_DEFINITION" | sed "s|__FOUNDRY_AGENT_ENDPOINT__|$FOUNDRY_AGENT_ENDPOINT|g; s/__FOUNDRY_AGENT_APP_NAME__/$FOUNDRY_AGENT_APP_NAME/g")
 fi
 
 # Deploy Logic App Consumption with identity + workflow + MI-auth $connections

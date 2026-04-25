@@ -249,3 +249,14 @@
 **Data flow confirmed:** Logic App → Cosmos DB classification field → Web App display
 
 ---
+
+### Session: Fix Foundry Response API URL Pattern
+- Updated `logic-app/workflow.json` — Classify_Email URI now uses the correct Foundry Response API path:
+  `{endpoint}/api/projects/default/applications/{app-name}/protocols/openai/responses?api-version=2025-11-15-preview`
+- Removed `model`/`instructions` from body (configured on the agent in Foundry); body is now `{"input": "..."}`
+- Updated Parse_Classification to extract from Response API nested output format: `output[0].content[0].text`
+- Renamed `FOUNDRY_AGENT_MODEL` → `FOUNDRY_AGENT_APP_NAME` across deploy scripts and README
+- Added deployment variable hints to `create_classifier_agent.py` output
+- **Key learning:** Foundry Response API uses application-name-based routing, not model-based. The endpoint is the base `.services.ai.azure.com` URL, and the app name goes in the path.
+
+---
