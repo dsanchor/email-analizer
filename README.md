@@ -61,6 +61,8 @@ python create_classifier_agent.py
 
 The script creates an **EmailClassifierAgent** in Foundry that analyzes email subject/body and returns a JSON classification: `{"type": "...", "score": N, "reasoning": "..."}`.
 
+> **Important:** After creation, you must **publish** the agent in the Azure AI Foundry portal so it exposes the Responses API endpoint used by the Logic App. Go to **AI Foundry → Your Project → Agents → EmailClassifierAgent → Publish**.
+
 After creation, set these variables when deploying the Logic App:
 
 | Deploy-time variable | Value |
