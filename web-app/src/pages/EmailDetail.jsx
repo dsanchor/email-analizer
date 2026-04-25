@@ -180,6 +180,50 @@ export default function EmailDetail() {
           </div>
         </header>
 
+        {email.classification && (
+          <div className="detail__classification">
+            <h2 className="detail__classification-title">Classification</h2>
+            <div className="detail__classification-body">
+              <div className="detail__meta-row">
+                <span className="detail__label">Type</span>
+                <span className="detail__value">
+                  <span
+                    className={`classification-type${
+                      email.classification.type === "unknown"
+                        ? " classification-type--unknown"
+                        : ""
+                    }`}
+                  >
+                    {email.classification.type}
+                  </span>
+                </span>
+              </div>
+              <div className="detail__meta-row">
+                <span className="detail__label">Score</span>
+                <span className="detail__value">
+                  <span className="classification-score">
+                    <span
+                      className="classification-score__bar"
+                      style={{ width: `${email.classification.score}%` }}
+                    />
+                    <span className="classification-score__text">
+                      {email.classification.score}%
+                    </span>
+                  </span>
+                </span>
+              </div>
+              {email.classification.reasoning && (
+                <div className="detail__meta-row">
+                  <span className="detail__label">Why</span>
+                  <span className="detail__value classification-reasoning">
+                    {email.classification.reasoning}
+                  </span>
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+
         <div
           className="detail__body"
           dangerouslySetInnerHTML={{ __html: safeBody }}

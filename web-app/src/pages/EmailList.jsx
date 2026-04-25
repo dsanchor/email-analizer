@@ -75,6 +75,12 @@ export default function EmailList() {
       } else if (sortCol === "from") {
         aVal = extractFromDisplay(a.from).toLowerCase();
         bVal = extractFromDisplay(b.from).toLowerCase();
+      } else if (sortCol === "type") {
+        aVal = (a.classification?.type || "").toLowerCase();
+        bVal = (b.classification?.type || "").toLowerCase();
+      } else if (sortCol === "score") {
+        aVal = a.classification?.score ?? -1;
+        bVal = b.classification?.score ?? -1;
       } else {
         aVal = (a.subject || "").toLowerCase();
         bVal = (b.subject || "").toLowerCase();
@@ -216,6 +222,18 @@ export default function EmailList() {
                   >
                     Subject <SortArrow col="subject" />
                   </th>
+                  <th
+                    className="email-table__th email-table__th--type sortable"
+                    onClick={() => handleSort("type")}
+                  >
+                    Type <SortArrow col="type" />
+                  </th>
+                  <th
+                    className="email-table__th email-table__th--score sortable"
+                    onClick={() => handleSort("score")}
+                  >
+                    Score <SortArrow col="score" />
+                  </th>
                 </tr>
               </thead>
               <tbody>
@@ -259,6 +277,26 @@ export default function EmailList() {
                           <path d="M21.44,11.05l-9.19,9.19a6,6,0,0,1-8.49-8.49l9.19-9.19a4,4,0,0,1,5.66,5.66l-9.2,9.19a2,2,0,0,1-2.83-2.83l8.49-8.48" />
                         </svg>
                       )}
+                    </td>
+                    <td className="email-table__td email-table__td--type">
+                      {email.classification ? (
+                        <span
+                          className={`classification-badge${
+                            email.classification.type === "unknown"
+                              ? " classification-badge--unknown"
+                              : ""
+                          }`}
+                        >
+                          {email.classification.type}
+                        </span>
+                      ) : (
+                        <span className="classification-badge classification-badge--empty">
+                          —
+                        </span>
+                      )}
+                    </td>
+                    <td className="email-table__td email-table__td--score">
+                      {email.classification ? email.classification.score : "—"}
                     </td>
                   </tr>
                 ))}
