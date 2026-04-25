@@ -11,15 +11,21 @@
 │  │   Microsoft  │──────▶│  Logic App   │ upload│  Azure Blob Storage  │ │
 │  │   365 Email  │ trigger│ (Consumption)│       │  email-attachments/  │ │
 │  │              │       │              │       │  {emailId}/{filename}│ │
-│  └──────────────┘       └──────┬───┬───┘       └──────────┬───────────┘ │
-│                                │   │ analyze PDFs         │ read       │
-│                          store │   ▼                      │            │
-│                                │ ┌──────────────────┐     │            │
-│                                │ │  Content          │     │            │
-│                                │ │  Understanding    │     │            │
-│                                │ │  (AI Services)    │     │            │
-│                                │ └──────────────────┘     │            │
-│                                ▼                          │            │
+│  └──────────────┘       └──┬──┬───┬───┘       └──────────┬───────────┘ │
+│                            │  │   │ analyze PDFs         │ read       │
+│                      store │  │   ▼                      │            │
+│                            │  │ ┌──────────────────┐     │            │
+│                            │  │ │  Content          │     │            │
+│                            │  │ │  Understanding    │     │            │
+│                            │  │ │  (AI Services)    │     │            │
+│                            │  │ └──────────────────┘     │            │
+│                            │  │ classify                 │            │
+│                            │  ▼                          │            │
+│                            │ ┌──────────────────┐        │            │
+│                            │ │  Foundry Agent    │        │            │
+│                            │ │  (AI Foundry)     │        │            │
+│                            │ └──────────────────┘        │            │
+│                            ▼                             │            │
 │                         ┌──────────────┐                  │            │
 │                         │              │                  │            │
 │                         │  Cosmos DB   │                  │            │
@@ -51,10 +57,12 @@
    b. Uploads to Blob Storage at: email-attachments/{emailId}/{filename}
    c. If PDF: calls Content Understanding API for field extraction
    d. Appends attachment metadata (+ analysis result if PDF) to array
-4. Logic App upserts email document with all attachment data to Cosmos DB
-5. Web App queries Cosmos DB for email list / detail
-6. Web App streams attachments from Blob Storage via managed identity
-7. Web App renders Content Understanding results (structured fields + raw JSON)
+4. Logic App calls Foundry Agent (Response API) with subject + body for classification
+   - Returns: {"type": "...", "score": N, "reasoning": "..."}
+5. Logic App upserts email document with attachments + classification to Cosmos DB
+6. Web App queries Cosmos DB for email list / detail
+7. Web App streams attachments from Blob Storage via managed identity
+8. Web App renders classification (type badge, score, reasoning) and CU results
 ```
 
 ---
@@ -120,6 +128,11 @@
       "blobPath": "email-attachments/abc123/Budget.xlsx"
     }
   ],
+  "classification": {
+    "type": "policy management",
+    "score": 90,
+    "reasoning": "The email discusses policy terms and renewal options..."
+  },
   "processedAt": "2024-12-15T14:30:05Z",
   "_ts": 1702650605
 }
@@ -133,6 +146,7 @@
 | Serverless capacity mode | Cost-efficient for bursty email workloads — pay per request |
 | Attachments embedded in document | Avoids cross-document joins; single read returns full email context |
 | `contentUnderstanding` per attachment | CU results stored alongside attachment metadata; no separate lookup needed |
+| `classification` at document level | Email classification applies to the whole email, not individual attachments |
 | `bodyPreview` separate from `body` | Enables fast list views without loading full HTML bodies |
 | `processedAt` timestamp | Tracks when Logic App processed the email vs. when it was received |
 
@@ -210,9 +224,24 @@ email-attachments/
                │
                ▼
 ┌─────────────────────────────────────┐
+│ Classify Email (HTTP POST)          │
+│ Foundry Agent Response API          │
+│ Input: subject + body               │
+│ Auth: MI (cognitiveservices.azure.com)│
+│ Output: type, score, reasoning      │
+└──────────────┬──────────────────────┘
+               │
+               ▼
+┌─────────────────────────────────────┐
+│ Parse Classification (Compose)      │
+│ Extract JSON from response          │
+└──────────────┬──────────────────────┘
+               │
+               ▼
+┌─────────────────────────────────────┐
 │ Upsert Document (Cosmos DB)         │
 │ Write email metadata + attachments  │
-│ array (with CU results if PDF)      │
+│ + classification to Cosmos DB       │
 └─────────────────────────────────────┘
 ```
 
@@ -236,6 +265,7 @@ For each PDF attachment, the Logic App calls the Content Understanding REST API:
 | Azure Cosmos DB | Managed Identity (System-Assigned) |
 | Azure Blob Storage | Managed Identity (System-Assigned) |
 | Content Understanding (HTTP) | Managed Identity (audience: `https://cognitiveservices.azure.com/`) |
+| Foundry Agent (HTTP) | Managed Identity (audience: `https://cognitiveservices.azure.com/`) |
 
 ---
 
@@ -250,6 +280,7 @@ All service-to-service communication uses Azure Managed Identities. **Zero conne
 | Storage Account | **Storage Blob Data Contributor** | Upload attachment blobs |
 | Cosmos DB Account | **Cosmos DB Built-in Data Contributor** | Create and update email documents |
 | Content Understanding (AI Services) | **Cognitive Services User** | Call CU analyzers for PDF field extraction |
+| Azure AI Foundry project | **Azure AI User** | Call Foundry Response API for email classification |
 
 ### Container App (System-Assigned Managed Identity)
 
@@ -267,6 +298,7 @@ All service-to-service communication uses Azure Managed Identities. **Zero conne
 | Cosmos DB Built-in Data Contributor | `00000000-0000-0000-0000-000000000002` |
 | Cosmos DB Built-in Data Reader | `00000000-0000-0000-0000-000000000001` |
 | Cognitive Services User | `a97b65f3-24c7-4388-baec-2e87135dc908` |
+| Azure AI User | `53ca6127-db72-4e55-ad43-a0e57ead88cb` |
 
 > **Note:** Cosmos DB built-in roles use data-plane RBAC and require `az cosmosdb sql role assignment create`, not the standard `az role assignment create`.
 
@@ -378,6 +410,9 @@ email-analyzer/
 ├── DESIGN.md                    # Apple-inspired design system
 ├── docs/
 │   └── architecture.md          # This document
+├── foundry-agent/
+│   ├── create_classifier_agent.py  # Provisions the Foundry classification agent
+│   └── requirements.txt            # Python dependencies
 ├── infrastructure/
 │   ├── deploy.sh                # AZ CLI deployment (all resources)
 │   └── redeploy-logic-app.sh    # Redeploy only the Logic App workflow
