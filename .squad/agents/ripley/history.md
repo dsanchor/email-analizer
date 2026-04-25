@@ -204,3 +204,48 @@
   - Non-PDF attachments omit the field (cleaner than storing nulls)
 - **Key files:** `logic-app/workflow.json`, `infrastructure/deploy.sh`, `infrastructure/redeploy-logic-app.sh`, `README.md`
 - **Decision doc:** `.squad/decisions/inbox/ripley-content-understanding.md`
+
+### Session: Foundry Agent Email Classification
+- Added `Classify_Email` HTTP action to `logic-app/workflow.json`
+  - Calls Azure AI Foundry Response API via managed identity (audience: cognitiveservices)
+  - Uses `__FOUNDRY_AGENT_ENDPOINT__` and `__FOUNDRY_AGENT_MODEL__` placeholders
+  - Runs after `For_Each_Attachment` succeeds
+- Added `Parse_Classification` Compose action to extract JSON from agent response
+  - Parses `body('Classify_Email')?['output']` as JSON
+- Updated `Create_or_Update_Cosmos_Document`:
+  - `runAfter` now depends on both `For_Each_Attachment` (Succeeded, Failed) and `Parse_Classification` (Succeeded, Failed, Skipped)
+  - New `classification` field added to Cosmos document body
+- **Resilience pattern:** Classification failure doesn't block Cosmos write (runAfter includes Failed/Skipped)
+- Updated `infrastructure/deploy.sh` and `infrastructure/redeploy-logic-app.sh`:
+  - New env vars: `FOUNDRY_AGENT_ENDPOINT`, `FOUNDRY_AGENT_MODEL`
+  - sed replacement for placeholders (same pipe pattern as Content Understanding)
+  - Summary output shows Foundry config when set
+- **Key files:** `logic-app/workflow.json`, `infrastructure/deploy.sh`, `infrastructure/redeploy-logic-app.sh`
+
+### Session: Foundry Agent Provisioning Script
+- Created `foundry-agent/create_classifier_agent.py` — Python script to provision EmailClassifierAgent in Azure AI Foundry
+  - Uses `azure-ai-projects` async SDK with `DefaultAzureCredential`
+  - Comprehensive classification instructions covering 13 categories (policy_management, billing_inquiry, claim_submission, claim_status, technical_support, complaint, information_request, account_management, compliance, sales_inquiry, feedback, spam, unknown)
+  - Agent returns strict JSON: `{"type": "...", "score": 0-100, "reasoning": "..."}`
+  - Includes worked examples in the prompt for few-shot guidance
+- Created `foundry-agent/requirements.txt` with `azure-ai-projects` and `azure-identity`
+- Updated `README.md`:
+  - Added numbered Prerequisites subsections for Foundry Agent and Content Understanding
+  - Documented env vars (`AZURE_AI_PROJECT_ENDPOINT`, `AZURE_AI_MODEL_DEPLOYMENT_NAME`) and setup steps
+  - Linked deploy-time variables (`FOUNDRY_AGENT_ENDPOINT`, `FOUNDRY_AGENT_MODEL`) to Logic App deployment
+  - Added `foundry-agent/` to Project Structure tree
+- **Key files:** `foundry-agent/create_classifier_agent.py`, `foundry-agent/requirements.txt`, `README.md`
+- **Decision doc:** `.squad/decisions/inbox/ripley-foundry-agent.md`
+
+### Cross-Agent Context — Session 2026-04-25
+
+**From Lambert:** Classification UI now live in EmailList (Type/Score sortable columns) and EmailDetail (full classification section with type pill, score bar, reasoning). Design maintains Apple Blue only — no new accent colors.
+
+**Testing implications:** Kane needs test coverage for:
+- Sorting by Type and Score columns in EmailList
+- Null classification handling (section hidden on EmailDetail)
+- Badge rendering for type pills (blue for real classifications, gray for "unknown")
+
+**Data flow confirmed:** Logic App → Cosmos DB classification field → Web App display
+
+---

@@ -32,3 +32,26 @@ Agent Scribe initialized and ready for work.
 ✅ Action items assigned (Lambert: 2 quality fixes)  
 ✅ Cross-agent impacts mapped (quality findings → Lambert history, Ripley infrastructure → Lambert env vars)  
 ✅ Constraints recorded (azure-cosmos >=4.0.0, storage account naming, XSS risk)
+
+## Session: Classification Feature End-to-End Orchestration — 2026-04-25
+
+**Scope:** Three parallel agent tasks completed — classification pipeline from infrastructure through UI
+
+**Ripley (Cloud Dev) — 2 tasks:**
+1. Added classification step to Logic App workflow calling Foundry Response API with managed identity auth
+2. Created Foundry agent provisioning script (`foundry-agent/create_classifier_agent.py`) with comprehensive classification instructions
+
+**Lambert (Frontend Dev) — 1 task:**
+1. Added classification display to EmailList (Type/Score sortable columns) and EmailDetail (classification section with pill + bar + reasoning)
+
+**Documentation completed:**
+- ✅ 3 orchestration log entries (one per agent task)
+- ✅ 1 session log entry
+- ✅ Merged 3 decision inbox files into decisions.md (deduplicated, formatted)
+- ✅ Updated Ripley history with Lambert UI context and testing implications
+- ✅ Updated Lambert history with Ripley infrastructure context and data contract
+- ✅ Git commit staged with all .squad/ changes
+
+**Data flow verified:** Logic App classification → Cosmos DB → Web App display (complete)
+
+**Next phase:** Kane (Tester) needs coverage for new classification workflows and UI sorting behaviors

@@ -562,6 +562,91 @@ SUBJECT_FILTER="Invoice" ./infrastructure/deploy.sh           # custom filter
 
 ---
 
+### Email Classification via Azure AI Foundry Agent — Ripley
+
+**Date:** 2025-07-18 | **Status:** Implemented
+
+#### Context
+The email-analyzer pipeline needed an AI classification step to categorize incoming emails before storing them in Cosmos DB.
+
+#### Decision
+- Added a `Classify_Email` HTTP action calling the Azure AI Foundry Response API (`/agents/runs`) with managed identity auth
+- Used a `Compose` action (`Parse_Classification`) to extract the JSON classification from the agent's `output` field
+- Classification runs AFTER attachment processing, BEFORE Cosmos write
+- Cosmos write depends on classification with `Succeeded/Failed/Skipped` — so classification failure never blocks the document write
+
+#### Rationale
+- **Managed identity over API keys:** Consistent with existing Content Understanding pattern — zero secrets
+- **Resilient runAfter:** Email storage is the critical path; classification is additive. If the Foundry agent is down, emails still get stored (classification field will be null)
+- **Placeholder pattern:** `__FOUNDRY_AGENT_ENDPOINT__` and `__FOUNDRY_AGENT_MODEL__` follow the established `__CONTENT_UNDERSTANDING_*__` convention for deploy-time substitution
+
+#### Impact
+- **Lambert (Web Dev):** Cosmos documents now include a `classification` field (JSON with `type`, `score`, `reasoning`). May be null if classification failed/skipped.
+- **Kane (Tests):** New actions to cover in workflow tests — `Classify_Email`, `Parse_Classification`, and the updated `runAfter` on Cosmos write.
+
+#### Affected Files
+- `logic-app/workflow.json` — classification actions and runAfter dependencies
+- `infrastructure/redeploy-logic-app.sh` — placeholder substitution
+- `infrastructure/deploy.sh` — new config variables
+
+---
+
+### Foundry Agent Provisioning Script — Ripley
+
+**Date:** 2025-07-24 | **Status:** Implemented
+
+#### Context
+The Logic App workflow already calls an Azure AI Foundry agent for email classification (added in a previous session). However, there was no tooling to actually *create* the agent in Foundry — users had to do it manually via the portal.
+
+#### Decision
+Created a standalone Python script (`foundry-agent/create_classifier_agent.py`) that provisions the `EmailClassifierAgent` using the `azure-ai-projects` SDK. The agent is configured with detailed classification instructions covering 13 email categories with confidence scoring.
+
+#### Rationale
+- **Reproducibility:** Script ensures the agent is created consistently across environments with identical instructions.
+- **Documentation as code:** The classification prompt lives in version control, not buried in a portal config.
+- **Onboarding:** New developers can set up the full pipeline by following README prerequisites — no portal clicking required for the agent.
+
+#### Consequences
+- `AZURE_AI_PROJECT_ENDPOINT` and `AZURE_AI_MODEL_DEPLOYMENT_NAME` must be set before running the script.
+- The script uses `DefaultAzureCredential`, so `az login` or equivalent must be done first.
+- Agent name is hardcoded to `EmailClassifierAgent` — changing it requires editing the script.
+
+#### Affected Files
+- `foundry-agent/create_classifier_agent.py` — new agent provisioning script
+- `foundry-agent/requirements.txt` — new dependencies file
+- `README.md` — new Prerequisites section
+
+---
+
+### Classification UI Display Pattern — Lambert
+
+**Date:** 2026-07-14 | **Status:** Implemented
+
+#### Context
+Email documents now include an optional `classification` field (`{ type, score, reasoning }`). Need to surface this in both the list and detail views.
+
+#### Decision
+- **Table (EmailList):** Type shown as a colored pill badge, Score as a plain number. Both columns are sortable. Missing classification shows dimmed "—".
+- **Detail (EmailDetail):** Full classification section (type pill + score bar + reasoning text) inserted between header and body. Section is hidden entirely when classification is null.
+- **Color coding:** Real classifications get a subtle blue pill (`rgba(0,113,227,0.08)`), "unknown" type gets gray. No new accent colors — stays Apple Blue only per DESIGN.md.
+
+#### Rationale
+- Searchable, sortable columns in list view provide quick filtering by classification type/score
+- Detail view shows full context (reasoning) without cluttering the list
+- Null handling is graceful — section disappears when data unavailable
+- Single-accent-color approach maintains design system fidelity
+
+#### Impact
+- **Kane:** New UI elements need test coverage (sorting by type/score, null classification handling, badge rendering).
+- **Ripley:** No infra changes needed — classification data already flows from Cosmos DB.
+
+#### Affected Files
+- `web-app/src/pages/EmailList.jsx` — Type/Score sortable columns
+- `web-app/src/pages/EmailDetail.jsx` — Classification section display
+- `web-app/src/App.css` — badge and section styling
+
+---
+
 ## Governance
 
 - All meaningful changes require team consensus

@@ -183,3 +183,30 @@
 - **Build verified:** `npm install` + `npm run build` succeed — 46 modules, 267KB JS bundle
 - **GitHub Actions:** No changes needed — `build-push.yml` still uses `context: ./web-app`
 - **`.gitignore` updated:** Added `node_modules/`, `web-app/dist/`
+
+### Classification UI — 2025-07-14
+- **Task:** Added email classification display (type, score, reasoning) to EmailList table and EmailDetail page
+- **Data shape:** `classification: { type, score, reasoning }` — nullable field on email documents from Cosmos DB
+- **EmailList changes:** Two new sortable columns (Type, Score) after Subject; classification-badge pill for type; graceful "—" for missing data
+- **EmailDetail changes:** New classification section between header and body with type pill, score bar, and reasoning text; hidden when classification is null
+- **CSS patterns:** `.classification-badge` (table pill), `.classification-type` (detail pill), `.classification-score` (bar indicator), `.classification-reasoning`; uses existing CSS vars and DESIGN.md conventions
+- **Design:** Blue pill for real classifications, gray pill for "unknown", 980px border-radius pills, Apple Blue accent only
+- **Sort logic:** Added "type" and "score" to existing sortCol state; score sorts numerically with -1 fallback for missing data
+
+### Cross-Agent Context — Session 2026-04-25
+
+**From Ripley:** Classification pipeline complete:
+- Logic App calls Azure AI Foundry agent with managed identity auth
+- Classification runs after attachment processing, before Cosmos write (non-blocking on failure)
+- Cosmos documents now include `classification` field (JSON: `{type, score, reasoning}`, nullable)
+- Foundry agent provisioning script created for reproducible setup
+
+**Data Contract:** Cosmos DB documents with new optional `classification` field flowing to UI
+
+**Test Coverage Needed (Kane):**
+- Sort by Type column in EmailList
+- Sort by Score column in EmailList  
+- Null classification handling (section hidden on detail page)
+- Badge rendering for type pills (blue for real, gray for "unknown")
+
+---
