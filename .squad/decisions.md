@@ -697,6 +697,42 @@ Parse_Classification Compose action referenced `output[0]`, hitting the wrong bl
 
 ---
 
+### Foundry Agent Publish Script — Ripley
+
+**Date:** 2026-04-26 | **Status:** Implemented
+
+#### Context
+The agent provisioning script (`create_classifier_agent.py`) creates the agent in Foundry, but the agent itself is not exposed as an invocable application. Publishing is required to create an Agent Application resource and a Managed Deployment with the Responses protocol, which is what the Logic App calls.
+
+#### Decision
+Created `foundry-agent/publish_agent.sh` — a bash script that uses ARM REST API (PUT) calls to:
+1. Create the Agent Application resource
+2. Create a Managed Deployment with Responses protocol v1.0
+3. Verify deployment reaches `Succeeded` state (polls up to 120 seconds)
+4. Optionally grant Azure AI User role for invocation access
+
+#### Rationale
+- **Full lifecycle:** Completes the Foundry agent journey: provision (Python) → publish (bash) → invoke (Logic App)
+- **Reproducible:** No portal clicks required — script handles the entire publishing workflow
+- **Robust:** Status polling ensures deployment is ready before returning
+- **Flexible:** Optional RBAC grant allows fine-grained access control
+
+#### Key Details
+- **ARM tokens:** Uses `az account get-access-token --resource https://management.azure.com`
+- **Invocation audience:** Different from ARM (`https://ai.azure.com` for Responses API calls)
+- **Defaults:** EmailClassifierAgent → email-classifier application → default deployment
+- **Cleanup:** Temp payload files written to script directory (not /tmp), cleaned up on completion
+
+#### Impact
+- **Logic App:** No changes needed — endpoint pattern already matches published agent
+- **Onboarding:** Developers can now publish agents programmatically as part of setup
+- **Deployment:** Foundry agent is now fully integrated into the pipeline
+
+#### Affected Files
+- `foundry-agent/publish_agent.sh` — new publishing script
+
+---
+
 ## Governance
 
 - All meaningful changes require team consensus
