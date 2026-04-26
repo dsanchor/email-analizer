@@ -61,15 +61,14 @@ python create_classifier_agent.py
 
 The script creates an **EmailClassifierAgent** in Foundry that analyzes email subject/body and returns a JSON classification: `{"type": "...", "score": N, "reasoning": "..."}`.
 
-> **Important:** After creation, you must **publish** the agent in the Azure AI Foundry portal so it exposes the Responses API endpoint used by the Logic App. Go to **AI Foundry → Your Project → Agents → EmailClassifierAgent → Publish**.
-
 After creation, set these variables when deploying the Logic App:
 
 | Deploy-time variable | Value |
 |----------------------|-------|
-| `FOUNDRY_AGENT_ENDPOINT` | Same as `AZURE_AI_PROJECT_ENDPOINT` base URL (e.g. `https://<your-foundry-resource>.services.ai.azure.com`) |
-| `FOUNDRY_AGENT_APP_NAME` | The application name registered in Foundry (e.g. `EmailClassifierAgent`) |
+| `FOUNDRY_AGENT_ENDPOINT` | Full project endpoint including the `/api/projects/<project>` path (e.g. `https://<account>.services.ai.azure.com/api/projects/<project>`) |
 | `FOUNDRY_RESOURCE_ID` | Full Azure resource ID of the Foundry project (e.g. `/subscriptions/.../resourceGroups/.../providers/Microsoft.CognitiveServices/accounts/<name>`) — needed to assign the `Azure AI User` role to the Logic App's managed identity |
+
+> **Tip:** You can test the agent with the invoke script: `python foundry-agent/invoke_agent.py --project-agent`
 
 ### 2. Azure AI Content Understanding — PDF Analysis (Optional)
 
@@ -163,9 +162,13 @@ email-analyzer/
 │   └── architecture.md          # Full architecture documentation
 ├── foundry-agent/
 │   ├── create_classifier_agent.py  # Provisions the Foundry classification agent
+│   ├── invoke_agent.py          # Tests the agent via the Responses API
+│   ├── publish_agent.sh         # Publishes agent as Agent Application (optional)
 │   └── requirements.txt         # Python dependencies
 ├── infrastructure/
-│   └── deploy.sh                # AZ CLI deployment (all resources)
+│   ├── deploy.sh                # AZ CLI deployment (all resources)
+│   ├── redeploy-logic-app.sh    # Updates Logic App workflow only (no infra changes)
+│   └── enable-public-access.sh  # Enables public access on storage (if needed)
 ├── logic-app/
 │   ├── workflow.json            # Logic App workflow definition (Consumption)
 │   └── connections.json         # Connection reference (documentation only)
@@ -208,7 +211,8 @@ email-analyzer/
    - Uploaded to Blob Storage at `email-attachments/{emailId}/{filename}`
    - **For PDF attachments:** Sent to Azure Content Understanding for field extraction
    - Recorded in the Cosmos DB document with its blob path (and analysis result if PDF)
-5. **All file types** are processed — PDFs, images, spreadsheets, documents, archives, etc.
+5. **Classify:** The email subject and body are sent to the Azure AI Foundry **EmailClassifierAgent** for classification; the result is stored in the `classification` field in Cosmos DB
+6. **All file types** are processed — PDFs, images, spreadsheets, documents, archives, etc.
 
 #### Content Understanding Integration (Optional)
 
