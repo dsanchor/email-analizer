@@ -254,7 +254,7 @@
     },
     "Parse_Classification": {
       "type": "Compose",
-      "inputs": "@json(body('Classify_Email')?['output'][0]?['content'][0]?['text'])",
+      "inputs": "@json(body('Classify_Email')?['output'][1]?['content'][0]?['text'])",
       "runAfter": {
         "Classify_Email": [
           "Succeeded"
