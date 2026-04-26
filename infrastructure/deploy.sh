@@ -25,9 +25,8 @@ CONTENT_UNDERSTANDING_ENDPOINT="${CONTENT_UNDERSTANDING_ENDPOINT:-}"
 CONTENT_UNDERSTANDING_ANALYZER_ID="${CONTENT_UNDERSTANDING_ANALYZER_ID:-}"
 CONTENT_UNDERSTANDING_RESOURCE_ID="${CONTENT_UNDERSTANDING_RESOURCE_ID:-}"
 
-# Foundry Agent (optional — set if integrating email classification)
+# Foundry Agent (project-level) (optional — set if integrating email classification)
 FOUNDRY_AGENT_ENDPOINT="${FOUNDRY_AGENT_ENDPOINT:-}"
-FOUNDRY_AGENT_APP_NAME="${FOUNDRY_AGENT_APP_NAME:-}"
 FOUNDRY_RESOURCE_ID="${FOUNDRY_RESOURCE_ID:-}"
 
 echo "╔══════════════════════════════════════════════════════════════╗"
@@ -46,8 +45,7 @@ if [ -n "$CONTENT_UNDERSTANDING_ENDPOINT" ]; then
   echo "  CU Analyzer ID:  $CONTENT_UNDERSTANDING_ANALYZER_ID"
 fi
 if [ -n "$FOUNDRY_AGENT_ENDPOINT" ]; then
-  echo "  Foundry Agent:   $FOUNDRY_AGENT_ENDPOINT"
-  echo "  Foundry App:     $FOUNDRY_AGENT_APP_NAME"
+  echo "  Foundry Agent (project-level): $FOUNDRY_AGENT_ENDPOINT"
   echo "  Foundry Resource ID: ${FOUNDRY_RESOURCE_ID:-(not set — MI role won't be assigned)}"
 fi
 echo ""
@@ -206,9 +204,9 @@ if [ -n "$CONTENT_UNDERSTANDING_ENDPOINT" ]; then
   WORKFLOW_DEFINITION=$(echo "$WORKFLOW_DEFINITION" | sed "s|__CONTENT_UNDERSTANDING_ENDPOINT__|$CONTENT_UNDERSTANDING_ENDPOINT|g; s/__CONTENT_UNDERSTANDING_ANALYZER_ID__/$CONTENT_UNDERSTANDING_ANALYZER_ID/g")
 fi
 
-# Replace Foundry Agent placeholders (if configured)
+# Replace Foundry Agent (project-level) placeholders (if configured)
 if [ -n "$FOUNDRY_AGENT_ENDPOINT" ]; then
-  WORKFLOW_DEFINITION=$(echo "$WORKFLOW_DEFINITION" | sed "s|__FOUNDRY_AGENT_ENDPOINT__|$FOUNDRY_AGENT_ENDPOINT|g; s/__FOUNDRY_AGENT_APP_NAME__/$FOUNDRY_AGENT_APP_NAME/g")
+  WORKFLOW_DEFINITION=$(echo "$WORKFLOW_DEFINITION" | sed "s|__FOUNDRY_AGENT_ENDPOINT__|$FOUNDRY_AGENT_ENDPOINT|g")
 fi
 
 # Deploy Logic App Consumption with identity + workflow + MI-auth $connections

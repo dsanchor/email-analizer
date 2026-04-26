@@ -19,9 +19,8 @@ STORAGE_ACCOUNT="${STORAGE_ACCOUNT:-emailanalyzerstor}"
 CONTENT_UNDERSTANDING_ENDPOINT="${CONTENT_UNDERSTANDING_ENDPOINT:-}"
 CONTENT_UNDERSTANDING_ANALYZER_ID="${CONTENT_UNDERSTANDING_ANALYZER_ID:-}"
 
-# Foundry Agent (optional — set if integrating email classification)
+# Foundry Agent (project-level) (optional — set if integrating email classification)
 FOUNDRY_AGENT_ENDPOINT="${FOUNDRY_AGENT_ENDPOINT:-}"
-FOUNDRY_AGENT_APP_NAME="${FOUNDRY_AGENT_APP_NAME:-}"
 
 echo "╔══════════════════════════════════════════════════════════════╗"
 echo "║  Email Analyzer — Logic App Workflow Redeploy                  ║"
@@ -32,8 +31,7 @@ echo "  Resource Group:  $RESOURCE_GROUP"
 echo "  Location:        $LOCATION"
 echo "  Logic App:       $LOGIC_APP (Consumption)"
 if [ -n "$FOUNDRY_AGENT_ENDPOINT" ]; then
-  echo "  Foundry Agent:   $FOUNDRY_AGENT_ENDPOINT"
-  echo "  Foundry App:     $FOUNDRY_AGENT_APP_NAME"
+  echo "  Foundry Agent (project-level): $FOUNDRY_AGENT_ENDPOINT"
 fi
 echo ""
 
@@ -81,9 +79,9 @@ if [ -n "$CONTENT_UNDERSTANDING_ENDPOINT" ]; then
   WORKFLOW_DEFINITION=$(echo "$WORKFLOW_DEFINITION" | sed "s|__CONTENT_UNDERSTANDING_ENDPOINT__|$CONTENT_UNDERSTANDING_ENDPOINT|g; s/__CONTENT_UNDERSTANDING_ANALYZER_ID__/$CONTENT_UNDERSTANDING_ANALYZER_ID/g")
 fi
 
-# Replace Foundry Agent placeholders (if configured)
+# Replace Foundry Agent (project-level) placeholders (if configured)
 if [ -n "$FOUNDRY_AGENT_ENDPOINT" ]; then
-  WORKFLOW_DEFINITION=$(echo "$WORKFLOW_DEFINITION" | sed "s|__FOUNDRY_AGENT_ENDPOINT__|$FOUNDRY_AGENT_ENDPOINT|g; s/__FOUNDRY_AGENT_APP_NAME__/$FOUNDRY_AGENT_APP_NAME/g")
+  WORKFLOW_DEFINITION=$(echo "$WORKFLOW_DEFINITION" | sed "s|__FOUNDRY_AGENT_ENDPOINT__|$FOUNDRY_AGENT_ENDPOINT|g")
 fi
 
 # ── Build and deploy the Logic App payload ───────────────────────────────────
