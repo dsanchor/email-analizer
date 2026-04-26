@@ -210,3 +210,25 @@
 - Badge rendering for type pills (blue for real, gray for "unknown")
 
 ---
+
+### Cross-Agent Update from Ripley (2026-04-26)
+
+**✅ STATUS FIELD ADDED TO COSMOS DOCUMENTS**
+
+**Change:** Ripley added `"status": "classified"` field to Cosmos DB document body in Logic App workflow.
+
+**What This Means:**
+- All email documents now include a `status` field capturing the final processing state
+- Currently static value `"classified"` (written after classification completes or is skipped)
+- Field is additive — schemaless Cosmos DB, no schema changes needed
+
+**For UI Display (Optional):**
+- Could filter/sort emails by status in EmailList (future enhancement)
+- Could show status badge on EmailDetail (e.g., "✓ Classified" indicator)
+- Status field available in Cosmos query results alongside classification data
+
+**No Immediate Action Required:**
+- Existing queries and templates unaffected (field is optional for backwards compatibility)
+- Kane: add `status: "classified"` to mock fixtures in test suite
+
+---

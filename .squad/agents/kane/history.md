@@ -79,7 +79,31 @@
   - CSS: Complete rewrite (1269 removed, 563 added) — ~400 lines of focused table CSS
   - JS: `static/js/sort.js` — external file for column sorting
 - **Design compliance:** Glass nav, Apple Blue accent, SF Pro font, responsive 360–1536px
-- **Data model:** All Jinja2 filters preserved (extract_from, extract_body, etc.) — handles both string and object field forms
+- **Data model:** All Jinja2 filters preserved (extract_from, extract_body, etc.) — handles both string and object field types
 - **Test Status:** All 30 tests passing — dashboard tests removed as part of deletion
 - **Your Action:** No changes needed. Existing test fixtures remain valid; filters handle all field types.
 - **Impact on your role:** Frontend now uses sorted table instead of paginated cards; all tests still pass with current fixture set.
+
+### Cross-Agent Update: Ripley Adds Status Field to Cosmos Documents — 2026-04-26
+
+**From Ripley:**
+- **Change:** Added `"status": "classified"` field to Cosmos DB document body in Logic App workflow
+- **When it's written:** After classification completes (or is skipped) — represents final processing state
+- **Your Action:** Update test fixtures to include `status: "classified"` in mock email documents
+- **Example fixture:**
+  ```javascript
+  {
+    id: "msg-123",
+    messageId: "msg-123",
+    from: { emailAddress: { name: "...", address: "..." } },
+    subject: "Test",
+    body: "...",
+    processedAt: "2026-04-26T07:33:17Z",
+    status: "classified",
+    classification: { type: "...", score: 95, reasoning: "..." }
+  }
+  ```
+- **Impact:** No test logic changes — field is just appended to documents. Fixtures now match actual Cosmos schema.
+- **Backwards Compatibility:** Field is optional for queries (schemaless), but all new documents will have it.
+
+---
