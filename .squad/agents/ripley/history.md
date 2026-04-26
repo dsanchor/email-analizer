@@ -259,4 +259,13 @@
 - Added deployment variable hints to `create_classifier_agent.py` output
 - **Key learning:** Foundry Response API uses application-name-based routing, not model-based. The endpoint is the base `.services.ai.azure.com` URL, and the app name goes in the path.
 
+### Session: Fix Parse_Classification Output Index
+- Fixed Foundry agent response parsing in `logic-app/workflow.json` Parse_Classification action
+- **Problem:** Response contains two output blocks:
+  - `output[0]` — reasoning block (no classification content)
+  - `output[1]` — message block (actual classification JSON)
+- **Fix:** Changed expression from `output[0]` to `output[1]` (line 257)
+- **Result:** Classification data now flows correctly to Cosmos DB
+- **Status:** SUCCESS — Logic App workflow completes; classification stored in email documents
+
 ---

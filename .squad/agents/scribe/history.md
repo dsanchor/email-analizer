@@ -55,3 +55,19 @@ Agent Scribe initialized and ready for work.
 **Data flow verified:** Logic App classification → Cosmos DB → Web App display (complete)
 
 **Next phase:** Kane (Tester) needs coverage for new classification workflows and UI sorting behaviors
+
+## Session: Parse_Classification Index Fix Orchestration — 2026-04-26T07:10:24Z
+
+**Scope:** Single background task from Ripley — fix incorrect Foundry agent response parsing
+
+**Ripley (Cloud Dev):**
+- Fixed Parse_Classification action in `logic-app/workflow.json` to read correct output block
+- Changed expression from `output[0]` (reasoning block) to `output[1]` (message block)
+- Classification data now flows correctly to Cosmos DB
+
+**Documentation completed:**
+- ✅ Orchestration log created (20260426T071024Z-ripley.md)
+- ✅ Session log created (20260426T071024Z-parse-classification-fix.md)
+- ✅ Merged 2 decision inbox files into decisions.md (copilot directive + parse fix)
+- ✅ Updated Ripley history with background task outcome
+- ✅ Git commit ready

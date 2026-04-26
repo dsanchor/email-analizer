@@ -647,6 +647,38 @@ Email documents now include an optional `classification` field (`{ type, score, 
 
 ---
 
+### Foundry Agent Audience Configuration — dsanchor (User Directive)
+
+**Date:** 2025-04-25T23:00:23Z  
+**Status:** Documented
+
+**Directive:** When authenticating against the agent in Foundry from a Logic App, use audience: `https://ai.azure.com`
+
+**Context:** User requirement for proper managed identity token scoping with Foundry endpoints.
+
+---
+
+### Parse_Classification Output Index Fix — Ripley
+
+**Date:** 2026-04-26 | **Status:** Implemented
+
+**Problem:** Foundry agent response contains two output blocks:
+- `output[0]` — reasoning block (no `content[0].text`)
+- `output[1]` — message block (actual classification JSON)
+
+Parse_Classification Compose action referenced `output[0]`, hitting the wrong block.
+
+**Solution:** Changed expression to read `output[1]` (message block).
+
+**Files Modified:**
+- `logic-app/workflow.json` — line 257
+
+**Impact:**
+- ✅ Classification data now flows correctly from Foundry agent
+- ✅ Logic App workflow completes successfully
+
+---
+
 ## Governance
 
 - All meaningful changes require team consensus
