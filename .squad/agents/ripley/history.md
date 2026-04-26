@@ -274,4 +274,18 @@
 - Static string value (not an expression) — by the time the Logic App writes to Cosmos, classification has already run
 - **Key file:** `logic-app/workflow.json` (line 288)
 
+### Session: Foundry Agent Publish Script
+- Created `foundry-agent/publish_agent.sh` — bash script to publish a Foundry agent as an Agent Application via ARM REST API
+- **4-step workflow:**
+  1. Create Agent Application (PUT) — links agent name to application resource
+  2. Create Managed Deployment (PUT) — configures Responses protocol v1.0
+  3. Verify Deployment — polls provisioningState up to 12 attempts (120s total)
+  4. (Optional) Grant Azure AI User role to a principal for invocation access
+- **Auth:** Uses `az account get-access-token --resource https://management.azure.com` for ARM calls
+- **Invocation note:** Published agent is invoked via `https://{account}.services.ai.azure.com/...` with audience `https://ai.azure.com` (different from ARM token)
+- **Defaults:** agent_name=EmailClassifierAgent, application_name=email-classifier, deployment_name=default, api_version=2025-05-15-preview
+- **Features:** `set -euo pipefail`, color output, HTTP status checking, `--help` flag, `--grant-role <principal_id>` option
+- **Cleanup:** Temp payload files written to script dir (not /tmp), cleaned up on completion
+- **Key file:** `foundry-agent/publish_agent.sh`
+
 ---
