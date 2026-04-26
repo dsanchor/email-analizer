@@ -284,7 +284,8 @@
           "conversationId": "@{triggerBody()?['conversationId']}",
           "attachments": "@variables('attachments')",
           "classification": "@outputs('Parse_Classification')",
-          "processedAt": "@{utcNow()}"
+          "processedAt": "@{utcNow()}",
+          "status": "classified"
         },
         "path": "/v2/cosmosdb/@{encodeURIComponent('__COSMOS_ACCOUNT__')}/dbs/@{encodeURIComponent('email-analyzer-db')}/colls/@{encodeURIComponent('emails')}/docs",
         "headers": {

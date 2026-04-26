@@ -268,4 +268,10 @@
 - **Result:** Classification data now flows correctly to Cosmos DB
 - **Status:** SUCCESS — Logic App workflow completes; classification stored in email documents
 
+### Session: Add `status` Field to Cosmos Document
+- Added `"status": "classified"` to the Cosmos DB document body in `Create_or_Update_Cosmos_Document` action
+- Placed after `processedAt` — represents the final processing state of the email
+- Static string value (not an expression) — by the time the Logic App writes to Cosmos, classification has already run
+- **Key file:** `logic-app/workflow.json` (line 288)
+
 ---
