@@ -18,7 +18,7 @@
 #   DEPLOYMENT_NAME   — Deployment name              (default: default)
 #   AGENT_NAME        — Agent name inside Foundry    (default: EmailClassifierAgent)
 #   AGENT_VERSION     — Agent version to deploy      (default: 1)
-#   API_VERSION       — ARM API version              (default: 2025-05-15-preview)
+#   API_VERSION       — ARM API version              (default: 2026-03-15-preview)
 
 set -euo pipefail
 
@@ -60,7 +60,7 @@ ${BOLD}Optional environment variables (defaults shown):${NC}
   DEPLOYMENT_NAME         Deployment name              [default]
   AGENT_NAME              Agent name in Foundry        [EmailClassifierAgent]
   AGENT_VERSION           Agent version                [1]
-  API_VERSION             ARM API version              [2025-05-15-preview]
+  API_VERSION             ARM API version              [2026-03-15-preview]
 
 ${BOLD}Examples:${NC}
   # Minimal — set required vars and run
@@ -102,7 +102,7 @@ APPLICATION_NAME="${APPLICATION_NAME:-email-classifier}"
 DEPLOYMENT_NAME="${DEPLOYMENT_NAME:-default}"
 AGENT_NAME="${AGENT_NAME:-EmailClassifierAgent}"
 AGENT_VERSION="${AGENT_VERSION:-1}"
-API_VERSION="${API_VERSION:-2025-05-15-preview}"
+API_VERSION="${API_VERSION:-2026-03-15-preview}"
 
 BASE_URL="https://management.azure.com/subscriptions/${SUBSCRIPTION_ID}/resourceGroups/${RESOURCE_GROUP}/providers/Microsoft.CognitiveServices/accounts/${ACCOUNT_NAME}/projects/${PROJECT_NAME}"
 
