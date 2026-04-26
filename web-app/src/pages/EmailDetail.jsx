@@ -180,6 +180,11 @@ export default function EmailDetail() {
           </div>
         </header>
 
+        <div
+          className="detail__body"
+          dangerouslySetInnerHTML={{ __html: safeBody }}
+        />
+
         {email.classification && (
           <div className="detail__classification">
             <h2 className="detail__classification-title">Classification</h2>
@@ -223,11 +228,6 @@ export default function EmailDetail() {
             </div>
           </div>
         )}
-
-        <div
-          className="detail__body"
-          dangerouslySetInnerHTML={{ __html: safeBody }}
-        />
 
         {email.attachments && email.attachments.length > 0 && (
           <div className="detail__attachments">
