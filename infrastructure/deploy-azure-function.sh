@@ -87,6 +87,26 @@ FUNCTION_STORAGE_ID=$(az storage account show \
   --resource-group "$RESOURCE_GROUP" \
   --query id --output tsv)
 
+# Pre-create the file share that Azure Functions needs for its content.
+# Using 'az storage share-rm create' which goes through ARM (RBAC-based),
+# NOT the storage data plane — so it works even when shared key access is disabled.
+CONTENT_SHARE="${FUNCTION_APP}"
+echo "  Pre-creating content file share '$CONTENT_SHARE' via ARM API..."
+if ! az storage share-rm show \
+  --storage-account "$FUNCTION_STORAGE" \
+  --resource-group "$RESOURCE_GROUP" \
+  --name "$CONTENT_SHARE" &>/dev/null; then
+  az storage share-rm create \
+    --storage-account "$FUNCTION_STORAGE" \
+    --resource-group "$RESOURCE_GROUP" \
+    --name "$CONTENT_SHARE" \
+    --quota 1 \
+    --output none
+  echo "  ✓ Content share created"
+else
+  echo "  (content share already exists)"
+fi
+
 # ── Create Lease Container in Cosmos DB ──────────────────────────────────────
 echo ""
 echo "▸ Creating lease container in Cosmos DB..."
@@ -116,9 +136,6 @@ if ! az functionapp show \
   --name "$FUNCTION_APP" \
   --resource-group "$RESOURCE_GROUP" &>/dev/null; then
   echo "  Function app not found, creating..."
-  # Use managed identity for storage to avoid shared key access requirement.
-  # The --storage-uses-managed-identity flag tells the runtime to use MI
-  # instead of connection strings to access the storage account.
   az functionapp create \
     --name "$FUNCTION_APP" \
     --resource-group "$RESOURCE_GROUP" \
@@ -129,7 +146,6 @@ if ! az functionapp show \
     --functions-version 4 \
     --storage-account "$FUNCTION_STORAGE" \
     --assign-identity '[system]' \
-    --storage-uses-managed-identity true \
     --output none
   echo "  ✓ Function app created"
 else
@@ -153,6 +169,10 @@ echo "  Function App MI Principal ID: $FUNCTION_PRINCIPAL_ID"
 echo ""
 echo "▸ Configuring Function App settings..."
 
+# Switch storage to managed identity AFTER creation.
+# AzureWebJobsStorage__accountName tells the runtime to use MI instead of connection string.
+# WEBSITE_CONTENTSHARE points to the pre-created file share.
+# We also remove any leftover AzureWebJobsStorage connection string.
 az functionapp config appsettings set \
   --name "$FUNCTION_APP" \
   --resource-group "$RESOURCE_GROUP" \
@@ -162,7 +182,16 @@ az functionapp config appsettings set \
     "COSMOS_CONTAINER=$COSMOS_CONTAINER" \
     "COSMOS_CONNECTION__accountEndpoint=$COSMOS_ENDPOINT" \
     "AzureWebJobsStorage__accountName=$FUNCTION_STORAGE" \
+    "WEBSITE_CONTENTSHARE=$FUNCTION_APP" \
+    "WEBSITE_CONTENTAZUREFILECONNECTIONSTRING__accountName=$FUNCTION_STORAGE" \
   --output none
+
+# Remove the legacy connection string if it exists (from prior deployments)
+az functionapp config appsettings delete \
+  --name "$FUNCTION_APP" \
+  --resource-group "$RESOURCE_GROUP" \
+  --setting-names "AzureWebJobsStorage" \
+  --output none 2>/dev/null || true
 
 # ── Role Assignments ─────────────────────────────────────────────────────────
 
