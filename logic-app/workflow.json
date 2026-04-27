@@ -20,7 +20,7 @@
             "fetchOnlyWithAttachment": false,
             "includeAttachments": true,
             "folderPath": "Inbox",
-            "subjectFilter": "Demo email"
+            "subjectFilter": "[DEMO]"
           }
         },
         "subscribe": {
@@ -35,7 +35,7 @@
             "importance": "Any",
             "fetchOnlyWithAttachment": false,
             "folderPath": "Inbox",
-            "subjectFilter": "Demo email"
+            "subjectFilter": "[DEMO]"
           }
         }
       },
