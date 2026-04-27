@@ -353,4 +353,18 @@
 - **Key files:** `azure-function/function_app.py`, `infrastructure/deploy-azure-function.sh`
 - **Decision doc:** `.squad/decisions/inbox/ripley-azure-function.md`
 
+### Session: Consumption → App Service Plan Migration
+- **Problem:** `az functionapp create` on Consumption plan always tries to create file shares via shared keys. Azure Policy enforces `allowSharedKeyAccess=false`, causing 403 errors. Pre-creating file shares via ARM API doesn't help because the CLI still attempts its own shared-key operations.
+- **Solution:** Switched to App Service Plan (B1, Linux) which stores code locally on the VM — no file share dependency at all.
+- **Changes to `infrastructure/deploy-azure-function.sh`:**
+  - Added `APP_SERVICE_PLAN` config variable (default: `email-analyzer-func-plan`)
+  - Added `az appservice plan create --sku B1 --is-linux` step
+  - Replaced `--consumption-plan-location` with `--plan` in `az functionapp create`
+  - Removed file share pre-creation (`az storage share-rm create`)
+  - Removed `WEBSITE_CONTENTSHARE` and `WEBSITE_CONTENTAZUREFILECONNECTIONSTRING__accountName` settings
+  - Added cleanup of legacy Consumption plan settings
+- **Architecture insight:** When Azure Policy blocks shared keys, Consumption plan is NOT viable. App Service Plan B1 is the safest fallback — Flex Consumption might work but has limited region availability.
+- **Key files:** `infrastructure/deploy-azure-function.sh`
+- **Decision doc:** `.squad/decisions/inbox/ripley-appservice-plan.md`
+
 ---
