@@ -394,14 +394,6 @@ a:hover { text-decoration: underline; }
   margin-bottom: 32px;
 }
 
-.detail__subject {
-  font-family: var(--font-display);
-  font-size: 21px;
-  font-weight: 600;
-  line-height: 1.25;
-  letter-spacing: normal;
-}
-
 .detail__meta {
   display: flex;
   flex-direction: column;
@@ -704,13 +696,11 @@ a:hover { text-decoration: underline; }
   .email-table__th--from { width: 160px; }
   .email-table__th--type { width: 120px; }
   .email-table__th--score { width: 70px; }
-  .detail__subject { font-size: 19px; }
 }
 
 @media (max-width: 640px) {
   .table-wrap { overflow-x: auto; -webkit-overflow-scrolling: touch; }
   .email-table { min-width: 740px; }
-  .detail__subject { font-size: 18px; }
   .detail__body { padding: 20px; }
   .detail__meta-row { flex-direction: column; gap: 2px; }
   .detail__label { width: auto; }

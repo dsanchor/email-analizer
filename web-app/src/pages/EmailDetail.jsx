@@ -216,7 +216,7 @@ export default function EmailDetail() {
           <div className="detail__meta">
             <div className="detail__meta-row">
               <span className="detail__label">Subject</span>
-              <span className="detail__value detail__subject">{email.subject}</span>
+              <span className="detail__value">{email.subject}</span>
             </div>
             <div className="detail__meta-row">
               <span className="detail__label">From</span>
