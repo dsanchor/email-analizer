@@ -93,11 +93,8 @@ def process_classified_emails(documents: func.DocumentList):
             doc_dict["statusHistory"] = status_history
             doc_dict["agentResult"] = agent_result
 
-            # Use partition key for the update
-            container.upsert_item(
-                body=doc_dict,
-                partition_key=message_id
-            )
+            # Upsert — partition key is extracted from the document body automatically
+            container.upsert_item(body=doc_dict)
 
             logging.info(f"Successfully updated document {doc_id} with agent result")
 
