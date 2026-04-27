@@ -66,16 +66,22 @@ echo "▸ Creating dedicated storage account for Function App internal storage..
 # Function App needs a storage account for its internal state (host.json, triggers, etc.)
 # Since the main storage account has shared key access disabled, we create a dedicated one
 # for the Function App that allows shared key access (required by Functions runtime)
-az storage account create \
+if ! az storage account show \
   --name "$FUNCTION_STORAGE" \
-  --resource-group "$RESOURCE_GROUP" \
-  --location "$LOCATION" \
-  --sku Standard_LRS \
-  --kind StorageV2 \
-  --min-tls-version TLS1_2 \
-  --allow-shared-key-access true \
-  --allow-blob-public-access false \
-  --output none 2>/dev/null || echo "  (storage account already exists)"
+  --resource-group "$RESOURCE_GROUP" &>/dev/null; then
+  az storage account create \
+    --name "$FUNCTION_STORAGE" \
+    --resource-group "$RESOURCE_GROUP" \
+    --location "$LOCATION" \
+    --sku Standard_LRS \
+    --kind StorageV2 \
+    --min-tls-version TLS1_2 \
+    --allow-shared-key-access true \
+    --allow-blob-public-access false \
+    --output none
+else
+  echo "  (storage account already exists)"
+fi
 
 FUNCTION_STORAGE_CONNECTION=$(az storage account show-connection-string \
   --name "$FUNCTION_STORAGE" \
@@ -86,36 +92,49 @@ FUNCTION_STORAGE_CONNECTION=$(az storage account show-connection-string \
 echo ""
 echo "▸ Creating lease container in Cosmos DB..."
 
-az cosmosdb sql container create \
+if ! az cosmosdb sql container show \
   --account-name "$COSMOS_ACCOUNT" \
   --resource-group "$RESOURCE_GROUP" \
   --database-name "$COSMOS_DB" \
-  --name "$LEASE_CONTAINER" \
-  --partition-key-path "/id" \
-  --throughput 400 \
-  --output none 2>/dev/null || echo "  (lease container already exists)"
+  --name "$LEASE_CONTAINER" &>/dev/null; then
+  az cosmosdb sql container create \
+    --account-name "$COSMOS_ACCOUNT" \
+    --resource-group "$RESOURCE_GROUP" \
+    --database-name "$COSMOS_DB" \
+    --name "$LEASE_CONTAINER" \
+    --partition-key-path "/id" \
+    --output none
+else
+  echo "  (lease container already exists)"
+fi
 
 # ── Function App (Consumption Plan, Linux, Python 3.11) ──────────────────────
 echo ""
 echo "▸ Creating Azure Function App (Consumption, Linux, Python 3.11)..."
 
-az functionapp create \
+if ! az functionapp show \
   --name "$FUNCTION_APP" \
-  --resource-group "$RESOURCE_GROUP" \
-  --consumption-plan-location "$LOCATION" \
-  --runtime python \
-  --runtime-version 3.11 \
-  --os-type Linux \
-  --functions-version 4 \
-  --storage-account "$FUNCTION_STORAGE" \
-  --assign-identity [system] \
-  --output none 2>/dev/null || echo "  (function app already exists)"
+  --resource-group "$RESOURCE_GROUP" &>/dev/null; then
+  az functionapp create \
+    --name "$FUNCTION_APP" \
+    --resource-group "$RESOURCE_GROUP" \
+    --consumption-plan-location "$LOCATION" \
+    --runtime python \
+    --runtime-version 3.11 \
+    --os-type Linux \
+    --functions-version 4 \
+    --storage-account "$FUNCTION_STORAGE" \
+    --assign-identity [system] \
+    --output none
+else
+  echo "  (function app already exists)"
+fi
 
 # Enable system-assigned managed identity (if not already enabled)
 az functionapp identity assign \
   --name "$FUNCTION_APP" \
   --resource-group "$RESOURCE_GROUP" \
-  --output none 2>/dev/null || true
+  --output none
 
 FUNCTION_PRINCIPAL_ID=$(az functionapp identity show \
   --name "$FUNCTION_APP" \
@@ -145,13 +164,22 @@ echo "▸ Assigning Cosmos DB Built-in Data Contributor role to Function App MI.
 
 # Function App MI needs write access to update documents after processing
 # Cosmos DB Built-in Data Contributor role ID: 00000000-0000-0000-0000-000000000002
-az cosmosdb sql role assignment create \
+if ! az cosmosdb sql role assignment exists \
   --account-name "$COSMOS_ACCOUNT" \
   --resource-group "$RESOURCE_GROUP" \
   --role-definition-id "00000000-0000-0000-0000-000000000002" \
   --principal-id "$FUNCTION_PRINCIPAL_ID" \
-  --scope "/" \
-  --output none 2>/dev/null || echo "  (role already assigned)"
+  --scope "/" &>/dev/null 2>&1; then
+  az cosmosdb sql role assignment create \
+    --account-name "$COSMOS_ACCOUNT" \
+    --resource-group "$RESOURCE_GROUP" \
+    --role-definition-id "00000000-0000-0000-0000-000000000002" \
+    --principal-id "$FUNCTION_PRINCIPAL_ID" \
+    --scope "/" \
+    --output none
+else
+  echo "  (role already assigned)"
+fi
 
 # ── Deploy Function Code ─────────────────────────────────────────────────────
 echo ""
