@@ -46,7 +46,7 @@ if [ -n "$CONTENT_UNDERSTANDING_ENDPOINT" ]; then
 fi
 if [ -n "$FOUNDRY_AGENT_ENDPOINT" ]; then
   echo "  Foundry Agent (project-level): $FOUNDRY_AGENT_ENDPOINT"
-  echo "  Foundry Resource ID: ${FOUNDRY_RESOURCE_ID:-(not set — MI role won't be assigned)}"
+  echo "  Foundry Resource ID: ${FOUNDRY_RESOURCE_ID:-(not set — MI role wont be assigned)}"
 fi
 echo ""
 
