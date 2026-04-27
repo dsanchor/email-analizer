@@ -3,11 +3,17 @@ set -euo pipefail
 
 ###############################################################################
 # Email Analyzer — Azure Function Deployment
-# Provisions: Function App (Linux, Python 3.11, Consumption)
+# Provisions: Function App (Linux, Python 3.11, App Service Plan B1)
 #             Managed Identity, role assignments (Cosmos DB + Storage)
 # Purpose: Cosmos DB change feed processor for classified emails
 # Security: Zero shared keys — managed identity for ALL access
 #           (Cosmos DB and Storage Account)
+#
+# NOTE: Uses App Service Plan (B1) instead of Consumption plan because
+#       Azure Policy enforces allowSharedKeyAccess=false on storage accounts.
+#       Consumption plan REQUIRES file shares created via shared keys,
+#       which fails under this policy. App Service Plan stores code locally,
+#       avoiding the file share requirement entirely.
 ###############################################################################
 
 # ── Configuration ────────────────────────────────────────────────────────────
@@ -19,6 +25,7 @@ COSMOS_CONTAINER="emails"
 LEASE_CONTAINER="leases"
 FUNCTION_APP="${FUNCTION_APP:-email-analyzer-func}"
 FUNCTION_STORAGE="${FUNCTION_STORAGE:-emailanalyzerfuncstor}"
+APP_SERVICE_PLAN="${APP_SERVICE_PLAN:-email-analyzer-func-plan}"
 
 echo "╔══════════════════════════════════════════════════════════════╗"
 echo "║  Email Analyzer — Azure Function Deployment                  ║"
@@ -30,6 +37,7 @@ echo "  Location:              $LOCATION"
 echo "  Cosmos Account:        $COSMOS_ACCOUNT"
 echo "  Function App:          $FUNCTION_APP"
 echo "  Function Storage:      $FUNCTION_STORAGE"
+echo "  App Service Plan:      $APP_SERVICE_PLAN"
 echo "  Cosmos Database:       $COSMOS_DB"
 echo "  Cosmos Container:      $COSMOS_CONTAINER"
 echo "  Lease Container:       $LEASE_CONTAINER"
@@ -64,8 +72,8 @@ echo "  ✓ Cosmos endpoint: $COSMOS_ENDPOINT"
 echo ""
 echo "▸ Creating dedicated storage account for Function App internal storage..."
 
-# Uses managed identity for storage access — no shared keys required.
-# This avoids 403 errors from Azure Policy enforcing allowSharedKeyAccess=false.
+# Storage is needed for WebJobs state (triggers, timers, etc.) but NOT for
+# file shares — App Service Plan stores code locally on the VM.
 if ! az storage account show \
   --name "$FUNCTION_STORAGE" \
   --resource-group "$RESOURCE_GROUP" &>/dev/null; then
@@ -87,26 +95,6 @@ FUNCTION_STORAGE_ID=$(az storage account show \
   --resource-group "$RESOURCE_GROUP" \
   --query id --output tsv)
 
-# Pre-create the file share that Azure Functions needs for its content.
-# Using 'az storage share-rm create' which goes through ARM (RBAC-based),
-# NOT the storage data plane — so it works even when shared key access is disabled.
-CONTENT_SHARE="${FUNCTION_APP}"
-echo "  Pre-creating content file share '$CONTENT_SHARE' via ARM API..."
-if ! az storage share-rm show \
-  --storage-account "$FUNCTION_STORAGE" \
-  --resource-group "$RESOURCE_GROUP" \
-  --name "$CONTENT_SHARE" &>/dev/null; then
-  az storage share-rm create \
-    --storage-account "$FUNCTION_STORAGE" \
-    --resource-group "$RESOURCE_GROUP" \
-    --name "$CONTENT_SHARE" \
-    --quota 1 \
-    --output none
-  echo "  ✓ Content share created"
-else
-  echo "  (content share already exists)"
-fi
-
 # ── Create Lease Container in Cosmos DB ──────────────────────────────────────
 echo ""
 echo "▸ Creating lease container in Cosmos DB..."
@@ -127,9 +115,30 @@ else
   echo "  (lease container already exists)"
 fi
 
-# ── Function App (Consumption Plan, Linux, Python 3.11) ──────────────────────
+# ── App Service Plan (Linux, B1) ─────────────────────────────────────────────
 echo ""
-echo "▸ Creating Azure Function App (Consumption, Linux, Python 3.11)..."
+echo "▸ Creating App Service Plan (Linux, B1)..."
+
+# App Service Plan avoids the Consumption plan's hard requirement for file shares
+# created via shared keys. B1 stores function code on the local VM filesystem.
+if ! az appservice plan show \
+  --name "$APP_SERVICE_PLAN" \
+  --resource-group "$RESOURCE_GROUP" &>/dev/null; then
+  az appservice plan create \
+    --name "$APP_SERVICE_PLAN" \
+    --resource-group "$RESOURCE_GROUP" \
+    --location "$LOCATION" \
+    --sku B1 \
+    --is-linux \
+    --output none
+  echo "  ✓ App Service Plan created (B1, Linux)"
+else
+  echo "  (App Service Plan already exists)"
+fi
+
+# ── Function App (App Service Plan, Linux, Python 3.11) ──────────────────────
+echo ""
+echo "▸ Creating Azure Function App (App Service Plan, Linux, Python 3.11)..."
 
 echo "  Checking if function app exists..."
 if ! az functionapp show \
@@ -139,7 +148,7 @@ if ! az functionapp show \
   az functionapp create \
     --name "$FUNCTION_APP" \
     --resource-group "$RESOURCE_GROUP" \
-    --consumption-plan-location "$LOCATION" \
+    --plan "$APP_SERVICE_PLAN" \
     --runtime python \
     --runtime-version 3.11 \
     --os-type Linux \
@@ -171,8 +180,8 @@ echo "▸ Configuring Function App settings..."
 
 # Switch storage to managed identity AFTER creation.
 # AzureWebJobsStorage__accountName tells the runtime to use MI instead of connection string.
-# WEBSITE_CONTENTSHARE points to the pre-created file share.
-# We also remove any leftover AzureWebJobsStorage connection string.
+# No WEBSITE_CONTENTSHARE or file connection string needed — App Service Plan
+# stores code locally, not on Azure Files.
 az functionapp config appsettings set \
   --name "$FUNCTION_APP" \
   --resource-group "$RESOURCE_GROUP" \
@@ -182,15 +191,13 @@ az functionapp config appsettings set \
     "COSMOS_CONTAINER=$COSMOS_CONTAINER" \
     "COSMOS_CONNECTION__accountEndpoint=$COSMOS_ENDPOINT" \
     "AzureWebJobsStorage__accountName=$FUNCTION_STORAGE" \
-    "WEBSITE_CONTENTSHARE=$FUNCTION_APP" \
-    "WEBSITE_CONTENTAZUREFILECONNECTIONSTRING__accountName=$FUNCTION_STORAGE" \
   --output none
 
-# Remove the legacy connection string if it exists (from prior deployments)
+# Remove legacy settings from prior Consumption plan deployments
 az functionapp config appsettings delete \
   --name "$FUNCTION_APP" \
   --resource-group "$RESOURCE_GROUP" \
-  --setting-names "AzureWebJobsStorage" \
+  --setting-names "AzureWebJobsStorage" "WEBSITE_CONTENTSHARE" "WEBSITE_CONTENTAZUREFILECONNECTIONSTRING__accountName" \
   --output none 2>/dev/null || true
 
 # ── Role Assignments ─────────────────────────────────────────────────────────
@@ -298,6 +305,7 @@ echo "╚═══════════════════════�
 echo ""
 echo "Resources:"
 echo "  Resource Group:      $RESOURCE_GROUP"
+echo "  App Service Plan:    $APP_SERVICE_PLAN (B1, Linux)"
 echo "  Function App:        $FUNCTION_APP"
 echo "  Function Storage:    $FUNCTION_STORAGE"
 echo "  Cosmos DB Account:   $COSMOS_ACCOUNT"
@@ -316,6 +324,7 @@ echo "    → Storage File Data Privileged Contributor"
 echo "    → Storage Table Data Contributor"
 echo ""
 echo "Security:"
+echo "  ✓ App Service Plan (B1) — no file share dependency, avoids shared key issues"
 echo "  ✓ Function App uses managed identity for Cosmos DB access"
 echo "  ✓ Function App uses managed identity for Storage access"
 echo "  ✓ Zero connection strings — fully managed identity based"
