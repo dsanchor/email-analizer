@@ -4,9 +4,10 @@ set -euo pipefail
 ###############################################################################
 # Email Analyzer — Azure Function Deployment
 # Provisions: Function App (Linux, Python 3.11, Consumption)
-#             Managed Identity, Cosmos DB role assignments, Storage account
+#             Managed Identity, role assignments (Cosmos DB + Storage)
 # Purpose: Cosmos DB change feed processor for classified emails
-# Security: Zero shared keys — managed identity for all Cosmos DB access
+# Security: Zero shared keys — managed identity for ALL access
+#           (Cosmos DB and Storage Account)
 ###############################################################################
 
 # ── Configuration ────────────────────────────────────────────────────────────
@@ -63,9 +64,8 @@ echo "  ✓ Cosmos endpoint: $COSMOS_ENDPOINT"
 echo ""
 echo "▸ Creating dedicated storage account for Function App internal storage..."
 
-# Function App needs a storage account for its internal state (host.json, triggers, etc.)
-# Since the main storage account has shared key access disabled, we create a dedicated one
-# for the Function App that allows shared key access (required by Functions runtime)
+# Uses managed identity for storage access — no shared keys required.
+# This avoids 403 errors from Azure Policy enforcing allowSharedKeyAccess=false.
 if ! az storage account show \
   --name "$FUNCTION_STORAGE" \
   --resource-group "$RESOURCE_GROUP" &>/dev/null; then
@@ -76,25 +76,16 @@ if ! az storage account show \
     --sku Standard_LRS \
     --kind StorageV2 \
     --min-tls-version TLS1_2 \
-    --allow-shared-key-access true \
     --allow-blob-public-access false \
     --output none
 else
   echo "  (storage account already exists)"
 fi
 
-# Ensure shared key access is enabled (required by Functions runtime for file shares)
-echo "  Ensuring shared key access is enabled on storage account..."
-az storage account update \
+FUNCTION_STORAGE_ID=$(az storage account show \
   --name "$FUNCTION_STORAGE" \
   --resource-group "$RESOURCE_GROUP" \
-  --allow-shared-key-access true \
-  --output none
-
-FUNCTION_STORAGE_CONNECTION=$(az storage account show-connection-string \
-  --name "$FUNCTION_STORAGE" \
-  --resource-group "$RESOURCE_GROUP" \
-  --query connectionString --output tsv)
+  --query id --output tsv)
 
 # ── Create Lease Container in Cosmos DB ──────────────────────────────────────
 echo ""
@@ -125,6 +116,9 @@ if ! az functionapp show \
   --name "$FUNCTION_APP" \
   --resource-group "$RESOURCE_GROUP" &>/dev/null; then
   echo "  Function app not found, creating..."
+  # Use managed identity for storage to avoid shared key access requirement.
+  # The --storage-uses-managed-identity flag tells the runtime to use MI
+  # instead of connection strings to access the storage account.
   az functionapp create \
     --name "$FUNCTION_APP" \
     --resource-group "$RESOURCE_GROUP" \
@@ -135,6 +129,7 @@ if ! az functionapp show \
     --functions-version 4 \
     --storage-account "$FUNCTION_STORAGE" \
     --assign-identity '[system]' \
+    --storage-uses-managed-identity true \
     --output none
   echo "  ✓ Function app created"
 else
@@ -166,10 +161,56 @@ az functionapp config appsettings set \
     "COSMOS_DATABASE=$COSMOS_DB" \
     "COSMOS_CONTAINER=$COSMOS_CONTAINER" \
     "COSMOS_CONNECTION__accountEndpoint=$COSMOS_ENDPOINT" \
-    "AzureWebJobsStorage=$FUNCTION_STORAGE_CONNECTION" \
+    "AzureWebJobsStorage__accountName=$FUNCTION_STORAGE" \
   --output none
 
 # ── Role Assignments ─────────────────────────────────────────────────────────
+
+# -- Storage roles for Function App MI --
+echo ""
+echo "▸ Assigning Storage roles to Function App MI..."
+
+# Storage Blob Data Owner — read/write blobs (function state, host.json, etc.)
+echo "  Assigning Storage Blob Data Owner..."
+az role assignment create \
+  --assignee "$FUNCTION_PRINCIPAL_ID" \
+  --role "Storage Blob Data Owner" \
+  --scope "$FUNCTION_STORAGE_ID" \
+  --output none 2>/dev/null || echo "  (Storage Blob Data Owner already assigned)"
+
+# Storage Account Contributor — manage file shares
+echo "  Assigning Storage Account Contributor..."
+az role assignment create \
+  --assignee "$FUNCTION_PRINCIPAL_ID" \
+  --role "Storage Account Contributor" \
+  --scope "$FUNCTION_STORAGE_ID" \
+  --output none 2>/dev/null || echo "  (Storage Account Contributor already assigned)"
+
+# Storage Queue Data Contributor — manage queues (used by triggers)
+echo "  Assigning Storage Queue Data Contributor..."
+az role assignment create \
+  --assignee "$FUNCTION_PRINCIPAL_ID" \
+  --role "Storage Queue Data Contributor" \
+  --scope "$FUNCTION_STORAGE_ID" \
+  --output none 2>/dev/null || echo "  (Storage Queue Data Contributor already assigned)"
+
+# Storage File Data Privileged Contributor — manage file shares (function code)
+echo "  Assigning Storage File Data Privileged Contributor..."
+az role assignment create \
+  --assignee "$FUNCTION_PRINCIPAL_ID" \
+  --role "Storage File Data Privileged Contributor" \
+  --scope "$FUNCTION_STORAGE_ID" \
+  --output none 2>/dev/null || echo "  (Storage File Data Privileged Contributor already assigned)"
+
+# Storage Table Data Contributor — manage tables (timer triggers, etc.)
+echo "  Assigning Storage Table Data Contributor..."
+az role assignment create \
+  --assignee "$FUNCTION_PRINCIPAL_ID" \
+  --role "Storage Table Data Contributor" \
+  --scope "$FUNCTION_STORAGE_ID" \
+  --output none 2>/dev/null || echo "  (Storage Table Data Contributor already assigned)"
+
+# -- Cosmos DB role for Function App MI --
 echo ""
 echo "▸ Assigning Cosmos DB Built-in Data Contributor role to Function App MI..."
 
@@ -239,10 +280,16 @@ echo ""
 echo "Managed Identity Roles:"
 echo "  Function App MI ($FUNCTION_PRINCIPAL_ID):"
 echo "    → Cosmos DB Built-in Data Contributor (00000000-0000-0000-0000-000000000002)"
+echo "    → Storage Blob Data Owner"
+echo "    → Storage Account Contributor"
+echo "    → Storage Queue Data Contributor"
+echo "    → Storage File Data Privileged Contributor"
+echo "    → Storage Table Data Contributor"
 echo ""
 echo "Security:"
 echo "  ✓ Function App uses managed identity for Cosmos DB access"
-echo "  ✓ Zero connection strings (except Function internal storage)"
+echo "  ✓ Function App uses managed identity for Storage access"
+echo "  ✓ Zero connection strings — fully managed identity based"
 echo ""
 echo "Function Trigger:"
 echo "  Cosmos DB change feed on $COSMOS_DB/$COSMOS_CONTAINER"
