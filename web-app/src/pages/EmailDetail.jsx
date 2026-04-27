@@ -251,6 +251,19 @@ export default function EmailDetail() {
           dangerouslySetInnerHTML={{ __html: safeBody }}
         />
 
+        {email.agentResult && email.agentResult.statements && email.agentResult.statements.length > 0 && (
+          <div className="detail__agent-result">
+            <h2 className="detail__agent-result-title">{email.agentResult.title}</h2>
+            <div className="detail__agent-result-body">
+              <ul className="agent-result-list">
+                {email.agentResult.statements.map((statement, idx) => (
+                  <li key={idx} className="agent-result-list__item">{statement}</li>
+                ))}
+              </ul>
+            </div>
+          </div>
+        )}
+
         {email.classification && (
           <div className="detail__classification">
             <h2 className="detail__classification-title">Classification</h2>

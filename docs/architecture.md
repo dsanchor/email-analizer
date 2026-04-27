@@ -28,22 +28,25 @@
 │                            ▼                             │            │
 │                         ┌──────────────┐                  │            │
 │                         │              │                  │            │
-│                         │  Cosmos DB   │                  │            │
-│                         │  (NoSQL API) │                  │            │
-│                         │  serverless  │                  │            │
-│                         └──────┬───────┘                  │            │
-│                                │ query                    │            │
-│                                ▼                          ▼            │
-│                         ┌────────────────────────────────────┐         │
-│                         │                                    │         │
-│                         │     Azure Container Apps           │         │
-│                         │     (Web App — Node.js/React)      │         │
-│                         │                                    │         │
-│                         └────────────────────────────────────┘         │
-│                                         │                              │
-│                                         ▼                              │
-│                                    End Users                           │
-│                                   (Browser)                            │
+│                         │  Cosmos DB   │◀─────┐          │            │
+│                         │  (NoSQL API) │ feed │          │            │
+│                         │  serverless  │      │          │            │
+│                         └──────┬───────┘      │          │            │
+│                                │ query       │ (opt)    │            │
+│                                │             │          │            │
+│                    ┌───────────────────────────┼──────┐  │            │
+│                    │                           │      │  │            │
+│                    ▼                           ▼      ▼  ▼            │
+│         ┌────────────────────────────────────────┐   ┌──────────┐    │
+│         │                                        │   │  Azure   │    │
+│         │     Azure Container Apps               │   │ Function │    │
+│         │     (Web App — Node.js/React)          │   │(Processor)   │
+│         │                                        │   └──────────┘    │
+│         └────────────────────────────────────────┘                   │
+│                                 │                                     │
+│                                 ▼                                     │
+│                            End Users                                  │
+│                           (Browser)                                   │
 └─────────────────────────────────────────────────────────────────────────┘
 ```
 
@@ -60,9 +63,14 @@
 4. Logic App calls Foundry Agent (Response API) with subject + body for classification
    - Returns: {"type": "...", "score": N, "reasoning": "..."}
 5. Logic App upserts email document with attachments + classification to Cosmos DB
-6. Web App queries Cosmos DB for email list / detail
-7. Web App streams attachments from Blob Storage via managed identity
-8. Web App renders classification (type badge, score, reasoning) and CU results
+6. [OPTIONAL] Azure Function is triggered by Cosmos DB change feed:
+   a. Detects document with statusHistory ending in "Email classified"
+   b. Appends "Processed by agent" status entry
+   c. Adds mock agentResult with validation statements
+   d. Updates document in Cosmos DB
+7. Web App queries Cosmos DB for email list / detail
+8. Web App streams attachments from Blob Storage via managed identity
+9. Web App renders classification (type badge, score, reasoning), CU results, and agent processing status
 ```
 
 ---
@@ -289,6 +297,12 @@ All service-to-service communication uses Azure Managed Identities. **Zero conne
 | Storage Account | **Storage Blob Data Reader** | Read/download attachment blobs |
 | Cosmos DB Account | **Cosmos DB Built-in Data Contributor** | Query, create, and delete email documents |
 
+### Azure Function (System-Assigned Managed Identity, Optional)
+
+| Target Resource | Role | Purpose |
+|----------------|------|---------|
+| Cosmos DB Account | **Cosmos DB Built-in Data Contributor** | Read change feed and update email documents with processing status |
+
 ### Role Assignment Reference
 
 | Role Name | Role Definition ID |
@@ -394,9 +408,16 @@ All service-to-service communication uses Azure Managed Identities. **Zero conne
 │  ├── Build Docker image from web-app/Dockerfile                 │
 │  └── Push to ghcr.io/<owner>/<repo>/email-analyzer-web            │
 │                                                                  │
+│  infrastructure/deploy-azure-function.sh (OPTIONAL)             │
+│  ├── Function App (Linux, Python 3.11, Consumption)             │
+│  ├── Dedicated Storage Account (function runtime internals)      │
+│  ├── Lease Container in Cosmos DB (change feed tracking)         │
+│  └── Managed Identity Role Assignment (Cosmos DB access)         │
+│                                                                  │
 │  Post-deploy (manual):                                           │
 │  ├── Configure O365 connector (interactive OAuth consent)        │
 │  └── Update Container App with ghcr.io image                    │
+│  └── [OPTIONAL] Run deploy-azure-function.sh for change feed processing
 └─────────────────────────────────────────────────────────────────┘
 ```
 
@@ -413,9 +434,16 @@ email-analyzer/
 ├── foundry-agent/
 │   ├── create_classifier_agent.py  # Provisions the Foundry classification agent
 │   └── requirements.txt            # Python dependencies
+├── azure-function/              # Optional: Cosmos DB change feed processor
+│   ├── README.md                # Function-specific documentation
+│   ├── function_app.py          # Python Azure Function entry point
+│   ├── host.json                # Function runtime configuration
+│   └── requirements.txt         # Python dependencies
 ├── infrastructure/
 │   ├── deploy.sh                # AZ CLI deployment (all resources)
-│   └── redeploy-logic-app.sh    # Redeploy only the Logic App workflow
+│   ├── deploy-azure-function.sh # Deploy optional Azure Function
+│   ├── redeploy-logic-app.sh    # Redeploy only the Logic App workflow
+│   └── enable-public-access.sh  # Enable public access on storage (if needed)
 ├── logic-app/
 │   ├── workflow.json            # Logic App Consumption workflow definition
 │   └── connections.json         # Connection reference (documentation only)

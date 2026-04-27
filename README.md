@@ -18,9 +18,18 @@ An Azure-native email processing pipeline that automatically captures incoming e
                                 │    └─────────────────────┘
                                 ▼
                      Cosmos DB + Blob Storage ◀── Web App ◀── Users
+                        ▲
+                        │ (optional)
+                        │ change feed
+                    ┌───┴──────────┐
+                    │              │
+                    │  Azure       │
+                    │  Function    │
+                    │  (processor) │
+                    └──────────────┘
 ```
 
-The Logic App triggers on new emails, extracts metadata, stores attachments in Blob Storage, calls **Content Understanding** for PDF field extraction and a **Foundry Agent** to classify each email, then writes structured documents (with classification and analysis results) to Cosmos DB. A Node.js web app (Express + React) on Azure Container Apps reads from both stores and presents emails with a clean, modern UI.
+The Logic App triggers on new emails, extracts metadata, stores attachments in Blob Storage, calls **Content Understanding** for PDF field extraction and a **Foundry Agent** to classify each email, then writes structured documents (with classification and analysis results) to Cosmos DB. A Node.js web app (Express + React) on Azure Container Apps reads from both stores and presents emails with a clean, modern UI. Optionally, an **Azure Function** watches the Cosmos DB change feed to process classified emails further.
 
 **Full architecture details:** [`docs/architecture.md`](docs/architecture.md)
 **Design system:** [`DESIGN.md`](DESIGN.md)
@@ -89,6 +98,52 @@ The Logic App can call Azure Content Understanding to extract structured fields 
 The deploy script grants the Logic App's managed identity `Cognitive Services User` role on the Content Understanding resource.
 
 > **Docs:** [Azure AI Content Understanding](https://learn.microsoft.com/en-us/azure/ai-services/content-understanding/overview)
+
+### 3. Azure Function — Cosmos DB Change Feed Processor (Optional)
+
+An optional Python Azure Function processes emails after they've been classified. It watches the Cosmos DB change feed for documents where the latest status is `"Email classified"`, then appends a `"Processed by agent"` status and adds mock agent validation results.
+
+**What it does:**
+
+- Triggered by Cosmos DB change feed on the `emails` container
+- Monitors the `statusHistory` array for the latest status
+- When a document is classified: appends a new status, adds mock `agentResult` field with validation statements
+- Uses managed identity (zero connection strings) for Cosmos DB access
+
+**Prerequisites:**
+
+- **Azure Functions Core Tools** — [Install](https://learn.microsoft.com/en-us/azure/azure-functions/functions-run-local)
+- **Python 3.11+** — Already required for foundry-agent provisioning
+
+**Deploy the function:**
+
+```bash
+./infrastructure/deploy-azure-function.sh
+```
+
+The script creates:
+- Azure Function App (Linux, Python 3.11, Consumption plan)
+- Dedicated storage account for Function internals
+- Leases container in Cosmos DB (for change feed tracking)
+- Assigns `Cosmos DB Built-in Data Contributor` role to the Function App's managed identity
+
+**Environment variables (set automatically by deploy script):**
+
+| Variable | Description |
+|----------|-------------|
+| `COSMOS_ENDPOINT` | Cosmos DB account endpoint URL |
+| `COSMOS_DATABASE` | Cosmos DB database name (default: `email-analyzer-db`) |
+| `COSMOS_CONTAINER` | Cosmos DB container name (default: `emails`) |
+| `COSMOS_CONNECTION__accountEndpoint` | Cosmos DB trigger binding connection (managed identity auth) |
+
+**Monitoring:**
+
+```bash
+# View function logs
+az functionapp logs tail --name email-analyzer-func --resource-group email-analyzer-rg
+```
+
+> **Docs:** [`azure-function/README.md`](azure-function/README.md)
 
 ## Quick Start
 
@@ -165,8 +220,14 @@ email-analyzer/
 │   ├── invoke_agent.py          # Tests the agent via the Responses API
 │   ├── publish_agent.sh         # Publishes agent as Agent Application (optional)
 │   └── requirements.txt         # Python dependencies
+├── azure-function/              # Optional: Cosmos DB change feed processor
+│   ├── README.md                # Function-specific documentation
+│   ├── function_app.py          # Python Azure Function entry point
+│   ├── host.json                # Function runtime configuration
+│   └── requirements.txt         # Python dependencies
 ├── infrastructure/
 │   ├── deploy.sh                # AZ CLI deployment (all resources)
+│   ├── deploy-azure-function.sh # Deploy optional Azure Function (optional)
 │   ├── redeploy-logic-app.sh    # Updates Logic App workflow only (no infra changes)
 │   └── enable-public-access.sh  # Enables public access on storage (if needed)
 ├── logic-app/
@@ -270,6 +331,7 @@ This solution uses **zero connection strings**. All service-to-service authentic
 | Logic App | Foundry AI project (optional) | Azure AI User |
 | Container App | Blob Storage | Storage Blob Data Reader |
 | Container App | Cosmos DB | Cosmos DB Built-in Data Contributor |
+| Azure Function (optional) | Cosmos DB | Cosmos DB Built-in Data Contributor |
 
 The only interactive authentication is the **Office 365 OAuth consent** — a one-time step in the Azure Portal under **API Connections → office365 → Edit API connection → Authorize**.
 
