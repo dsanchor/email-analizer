@@ -315,3 +315,42 @@
 - **Note:** `redeploy-logic-app.sh` has no role assignments — safe, no changes needed
 
 ---
+
+### Session: Azure Function — Cosmos DB Change Feed Processor
+- **Task:** Create Python Azure Function triggered by Cosmos DB change feed to process classified emails
+- **Created files:**
+  - `azure-function/function_app.py` — Python v2 programming model function with `cosmos_db_trigger`
+  - `azure-function/host.json` — Azure Functions host config (v2, extension bundle)
+  - `azure-function/requirements.txt` — Python dependencies (azure-functions, azure-cosmos, azure-identity)
+  - `azure-function/README.md` — Function documentation
+  - `infrastructure/deploy-azure-function.sh` — Deployment script
+- **Function behavior:**
+  - Triggered on Cosmos DB change feed for `emails` container
+  - Checks last `statusHistory` entry — processes only if status = "Email classified"
+  - Appends new status: `{"status": "Processed by agent", "timestamp": "<UTC ISO>"}`
+  - Adds `agentResult` field with mock validation data (title, statements array)
+  - Uses Cosmos SDK with DefaultAzureCredential (managed identity) to write back updates
+  - Idempotent: skips documents already marked "Processed by agent"
+- **Deployment script (`deploy-azure-function.sh`):**
+  - Creates dedicated storage account for Function App internal state (`$FUNCTION_STORAGE`)
+    - **Why separate storage:** Main storage account has `--allow-shared-key-access false`, but Function runtime requires shared key access for its internal operations (host.json, triggers, bindings state)
+  - Creates `leases` container in Cosmos DB (partition key `/id`, 400 RU/s throughput)
+  - Creates Function App (Linux, Python 3.11, Consumption plan) with system-assigned MI
+  - Configures app settings:
+    - `COSMOS_ENDPOINT` — from Cosmos account
+    - `COSMOS_DATABASE` = `email-analyzer-db`
+    - `COSMOS_CONTAINER` = `emails`
+    - `COSMOS_CONNECTION__accountEndpoint` — for trigger binding with MI auth (double underscore pattern)
+    - `AzureWebJobsStorage` — connection string to Function storage account
+  - Assigns `Cosmos DB Built-in Data Contributor` role (00000000-0000-0000-0000-000000000002) to Function MI
+  - Deploys function code using `func azure functionapp publish` (if Azure Functions Core Tools installed)
+- **Cosmos DB trigger binding:**
+  - Uses `@app.cosmos_db_trigger` decorator with `connection="COSMOS_CONNECTION"`
+  - Connection setting `COSMOS_CONNECTION__accountEndpoint` enables managed identity auth (no connection string)
+  - `create_lease_container_if_not_exists=True` for automatic lease container creation
+- **Pattern:** Azure Function change feed processor complements Logic App — Logic App handles email intake/classification, Function handles post-classification agent processing
+- **Security:** Zero connection strings for Cosmos DB — managed identity everywhere (except Function internal storage which requires shared key per Azure Functions runtime requirement)
+- **Key files:** `azure-function/function_app.py`, `infrastructure/deploy-azure-function.sh`
+- **Decision doc:** `.squad/decisions/inbox/ripley-azure-function.md`
+
+---

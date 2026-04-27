@@ -120,9 +120,11 @@ fi
 echo ""
 echo "▸ Creating Azure Function App (Consumption, Linux, Python 3.11)..."
 
+echo "  Checking if function app exists..."
 if ! az functionapp show \
   --name "$FUNCTION_APP" \
   --resource-group "$RESOURCE_GROUP" &>/dev/null; then
+  echo "  Function app not found, creating..."
   az functionapp create \
     --name "$FUNCTION_APP" \
     --resource-group "$RESOURCE_GROUP" \
@@ -132,8 +134,9 @@ if ! az functionapp show \
     --os-type Linux \
     --functions-version 4 \
     --storage-account "$FUNCTION_STORAGE" \
-    --assign-identity [system] \
+    --assign-identity '[system]' \
     --output none
+  echo "  ✓ Function app created"
 else
   echo "  (function app already exists)"
 fi
