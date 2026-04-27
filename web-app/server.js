@@ -96,6 +96,7 @@ const app = express();
 
 // Serve React build in production
 const distPath = path.join(__dirname, "dist");
+app.use(express.json());
 app.use(express.static(distPath));
 
 // ---------------------------------------------------------------------------
@@ -165,6 +166,28 @@ app.get("/api/emails/:id", async (req, res) => {
   } catch (err) {
     console.error("Failed to fetch email detail from Cosmos DB:", err.message);
     res.status(503).json({ error: "Unable to load this email. Please try again later." });
+  }
+});
+
+app.delete("/api/emails/:id", async (req, res) => {
+  try {
+    const container = getCosmosContainer();
+    // Need to query first to get the document's partition key value
+    const querySpec = {
+      query: "SELECT * FROM c WHERE c.id = @id",
+      parameters: [{ name: "@id", value: req.params.id }],
+    };
+    const { resources } = await container.items.query(querySpec).fetchAll();
+    if (resources.length === 0) {
+      return res.status(404).json({ error: "Email not found" });
+    }
+    const email = resources[0];
+    // Delete using id and partition key (messageId)
+    await container.item(email.id, email.messageId).delete();
+    res.json({ success: true });
+  } catch (err) {
+    console.error("Failed to delete email from Cosmos DB:", err.message);
+    res.status(503).json({ error: "Unable to delete email. Please try again later." });
   }
 });
 

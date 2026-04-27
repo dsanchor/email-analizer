@@ -288,4 +288,21 @@
 - **Cleanup:** Temp payload files written to script dir (not /tmp), cleaned up on completion
 - **Key file:** `foundry-agent/publish_agent.sh`
 
+### Session: StatusHistory Array — Replace Single Status Field
+- **Change:** Replaced single `"status": "classified"` field with `statusHistory` array of `{status, timestamp}` objects
+- **Implementation in `logic-app/workflow.json`:**
+  - Added `Initialize_Status_History` variable (array) initialized with `[{"status": "Email received", "timestamp": "@{utcNow()}"}]`
+  - Added `Create_Initial_Cosmos_Document` — first upsert with email content + statusHistory (no attachments/classification yet)
+  - Added `Check_Has_Attachments` condition after For_Each_Attachment loop
+    - True branch: appends "Attachments processed" to statusHistory, upserts with attachments array
+    - False branch: no-op
+  - Added `Append_Classified_Status` — appends "Email classified" to statusHistory after Parse_Classification
+  - Renamed final action from `Create_or_Update_Cosmos_Document` → `Update_Cosmos_Final`
+  - Final upsert includes classification, processedAt, and full statusHistory
+- **Flow:** Trigger → Init vars → Initial Cosmos upsert → For_Each_Attachment → Check_Has_Attachments (conditional upsert) → Classify → Parse → Append status → Final upsert
+- **Resilience:** `Update_Cosmos_Final` runAfter includes `Check_Has_Attachments: [Succeeded, Failed]` and `Append_Classified_Status: [Succeeded, Failed, Skipped]` so the document is always updated even if classification fails
+- **Pattern:** Use Logic App array variable + AppendToArrayVariable to build statusHistory incrementally across multiple upserts
+- **Key file:** `logic-app/workflow.json`
+- **Decision doc:** `.squad/decisions/inbox/ripley-status-history.md`
+
 ---

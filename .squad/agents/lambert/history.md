@@ -232,3 +232,13 @@
 - Kane: add `status: "classified"` to mock fixtures in test suite
 
 ---
+
+### Status Flow UI (v7) — 2025-07-21
+
+- **Scope:** Added statusHistory support to EmailList table and EmailDetail page
+- **Data shape:** `statusHistory: [{status, timestamp}, ...]` — array on email documents from Cosmos DB
+- **Backwards compatible:** Falls back to old `status` string field, then to "—" if neither exists
+- **EmailList changes:** New sortable "Status" column after Score; status-badge pill with 3 color variants (gray/received, amber/processed, green/classified); `getLatestStatus()` helper reads last element of statusHistory array
+- **EmailDetail changes:** Horizontal status flow timeline after back link, before header; shows all steps with circles, labels, timestamps; completed steps get checkmark + blue fill, active/latest step gets blue glow ring; stacks vertically on mobile
+- **CSS patterns:** `.status-badge` (table pill, 3 variants), `.status-timeline` (horizontal flow with step-groups, circles, connectors, labels, timestamps); uses existing CSS vars; responsive at 640px breakpoint
+- **Design:** Apple-inspired — 14px circles, 2px connectors, --color-blue accent, 980px pill radius on badges, subtle shadows per DESIGN.md

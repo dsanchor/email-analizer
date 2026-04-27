@@ -4,6 +4,22 @@ import { useNavigate, useSearchParams } from "react-router-dom";
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
+function getLatestStatus(email) {
+  if (email.statusHistory && email.statusHistory.length > 0) {
+    return email.statusHistory[email.statusHistory.length - 1].status;
+  }
+  if (email.status) return email.status;
+  return null;
+}
+
+function statusBadgeClass(status) {
+  if (!status) return "status-badge status-badge--empty";
+  const s = status.toLowerCase();
+  if (s.includes("classified")) return "status-badge status-badge--classified";
+  if (s.includes("attachment") || s.includes("processed")) return "status-badge status-badge--processed";
+  return "status-badge status-badge--received";
+}
+
 function extractFromDisplay(value) {
   if (value && typeof value === "object") {
     const ea = value.emailAddress || {};
@@ -81,6 +97,9 @@ export default function EmailList() {
       } else if (sortCol === "score") {
         aVal = a.classification?.score ?? -1;
         bVal = b.classification?.score ?? -1;
+      } else if (sortCol === "status") {
+        aVal = (getLatestStatus(a) || "").toLowerCase();
+        bVal = (getLatestStatus(b) || "").toLowerCase();
       } else {
         aVal = (a.subject || "").toLowerCase();
         bVal = (b.subject || "").toLowerCase();
@@ -111,6 +130,17 @@ export default function EmailList() {
       setSearchParams({ q: trimmed });
     } else {
       setSearchParams({});
+    }
+  };
+
+  const handleDelete = async (id) => {
+    if (!window.confirm("Are you sure you want to remove this email?")) return;
+    try {
+      const res = await fetch(`/api/emails/${encodeURIComponent(id)}`, { method: "DELETE" });
+      if (!res.ok) throw new Error("Failed to delete");
+      setEmails((prev) => prev.filter((e) => e.id !== id));
+    } catch (err) {
+      alert("Could not remove email. Please try again.");
     }
   };
 
@@ -234,6 +264,13 @@ export default function EmailList() {
                   >
                     Score <SortArrow col="score" />
                   </th>
+                  <th
+                    className="email-table__th email-table__th--status sortable"
+                    onClick={() => handleSort("status")}
+                  >
+                    Status <SortArrow col="status" />
+                  </th>
+                  <th className="email-table__th email-table__th--actions"></th>
                 </tr>
               </thead>
               <tbody>
@@ -297,6 +334,35 @@ export default function EmailList() {
                     </td>
                     <td className="email-table__td email-table__td--score">
                       {email.classification ? email.classification.score : "—"}
+                    </td>
+                    <td className="email-table__td email-table__td--status">
+                      {(() => {
+                        const latest = getLatestStatus(email);
+                        return latest ? (
+                          <span className={statusBadgeClass(latest)}>{latest}</span>
+                        ) : (
+                          <span className="status-badge status-badge--empty">—</span>
+                        );
+                      })()}
+                    </td>
+                    <td className="email-table__td email-table__td--actions">
+                      <button
+                        className="btn-delete"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleDelete(email.id);
+                        }}
+                        aria-label={`Delete email: ${email.subject}`}
+                        title="Remove"
+                      >
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                          <polyline points="3 6 5 6 21 6" />
+                          <path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6" />
+                          <path d="M10 11v6" />
+                          <path d="M14 11v6" />
+                          <path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2" />
+                        </svg>
+                      </button>
                     </td>
                   </tr>
                 ))}

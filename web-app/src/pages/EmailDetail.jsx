@@ -49,6 +49,31 @@ function formatDate(value) {
   }
 }
 
+function formatTimestamp(value) {
+  if (!value) return "";
+  try {
+    const dt = new Date(value);
+    return dt.toLocaleDateString("en-US", {
+      month: "short",
+      day: "numeric",
+      hour: "numeric",
+      minute: "2-digit",
+    });
+  } catch {
+    return value;
+  }
+}
+
+function getStatusHistory(email) {
+  if (email.statusHistory && email.statusHistory.length > 0) {
+    return email.statusHistory;
+  }
+  if (email.status) {
+    return [{ status: email.status, timestamp: null }];
+  }
+  return null;
+}
+
 function humanSize(sizeBytes) {
   if (sizeBytes == null) return "";
   let size = Number(sizeBytes);
@@ -149,9 +174,50 @@ export default function EmailDetail() {
           Back to Inbox
         </Link>
 
+        {(() => {
+          const history = getStatusHistory(email);
+          if (!history) return null;
+          return (
+            <div className="status-timeline">
+              {history.map((step, i) => {
+                const isLast = i === history.length - 1;
+                return (
+                  <div key={i} className="status-timeline__step-group">
+                    <div
+                      className={`status-timeline__step${
+                        isLast ? " status-timeline__step--active" : " status-timeline__step--done"
+                      }`}
+                    >
+                      <div className="status-timeline__circle">
+                        {!isLast && (
+                          <svg width="10" height="10" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true">
+                            <path d="M6.5 12.5l-4-4 1.4-1.4L6.5 9.7l6.1-6.1 1.4 1.4z" />
+                          </svg>
+                        )}
+                      </div>
+                      <span className="status-timeline__label">{step.status}</span>
+                      {step.timestamp && (
+                        <span className="status-timeline__time">
+                          {formatTimestamp(step.timestamp)}
+                        </span>
+                      )}
+                    </div>
+                    {i < history.length - 1 && (
+                      <div className="status-timeline__connector" />
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          );
+        })()}
+
         <header className="detail__header">
-          <h1 className="detail__subject">{email.subject}</h1>
           <div className="detail__meta">
+            <div className="detail__meta-row">
+              <span className="detail__label">Subject</span>
+              <span className="detail__value detail__subject">{email.subject}</span>
+            </div>
             <div className="detail__meta-row">
               <span className="detail__label">From</span>
               <span className="detail__value">

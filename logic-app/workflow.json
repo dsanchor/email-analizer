@@ -56,6 +56,62 @@
       },
       "runAfter": {}
     },
+    "Initialize_Status_History": {
+      "type": "InitializeVariable",
+      "inputs": {
+        "variables": [
+          {
+            "name": "statusHistory",
+            "type": "array",
+            "value": [
+              {
+                "status": "Email received",
+                "timestamp": "@{utcNow()}"
+              }
+            ]
+          }
+        ]
+      },
+      "runAfter": {
+        "Initialize_Attachments_Array": [
+          "Succeeded"
+        ]
+      }
+    },
+    "Create_Initial_Cosmos_Document": {
+      "type": "ApiConnection",
+      "inputs": {
+        "host": {
+          "connection": {
+            "name": "@parameters('$connections')['cosmosdb']['connectionId']"
+          }
+        },
+        "method": "post",
+        "body": {
+          "id": "@{triggerBody()?['id']}",
+          "messageId": "@{coalesce(triggerBody()?['internetMessageId'], triggerBody()?['id'])}",
+          "subject": "@{triggerBody()?['subject']}",
+          "body": "@triggerBody()?['body']",
+          "bodyPreview": "@{triggerBody()?['bodyPreview']}",
+          "from": "@triggerBody()?['from']",
+          "toRecipients": "@triggerBody()?['toRecipients']",
+          "receivedDateTime": "@{triggerBody()?['receivedDateTime']}",
+          "hasAttachments": "@triggerBody()?['hasAttachments']",
+          "importance": "@{triggerBody()?['importance']}",
+          "conversationId": "@{triggerBody()?['conversationId']}",
+          "statusHistory": "@variables('statusHistory')"
+        },
+        "path": "/v2/cosmosdb/@{encodeURIComponent('__COSMOS_ACCOUNT__')}/dbs/@{encodeURIComponent('email-analyzer-db')}/colls/@{encodeURIComponent('emails')}/docs",
+        "headers": {
+          "x-ms-documentdb-is-upsert": "True"
+        }
+      },
+      "runAfter": {
+        "Initialize_Status_History": [
+          "Succeeded"
+        ]
+      }
+    },
     "For_Each_Attachment": {
       "type": "Foreach",
       "foreach": "@triggerBody()?['attachments']",
@@ -220,7 +276,7 @@
         }
       },
       "runAfter": {
-        "Initialize_Attachments_Array": [
+        "Create_Initial_Cosmos_Document": [
           "Succeeded"
         ]
       },
@@ -228,6 +284,74 @@
         "concurrency": {
           "repetitions": 1
         }
+      }
+    },
+    "Check_Has_Attachments": {
+      "type": "If",
+      "expression": {
+        "and": [
+          {
+            "equals": [
+              "@triggerBody()?['hasAttachments']",
+              true
+            ]
+          }
+        ]
+      },
+      "actions": {
+        "Append_Attachments_Processed_Status": {
+          "type": "AppendToArrayVariable",
+          "inputs": {
+            "name": "statusHistory",
+            "value": {
+              "status": "Attachments processed",
+              "timestamp": "@{utcNow()}"
+            }
+          }
+        },
+        "Update_Cosmos_With_Attachments": {
+          "type": "ApiConnection",
+          "inputs": {
+            "host": {
+              "connection": {
+                "name": "@parameters('$connections')['cosmosdb']['connectionId']"
+              }
+            },
+            "method": "post",
+            "body": {
+              "id": "@{triggerBody()?['id']}",
+              "messageId": "@{coalesce(triggerBody()?['internetMessageId'], triggerBody()?['id'])}",
+              "subject": "@{triggerBody()?['subject']}",
+              "body": "@triggerBody()?['body']",
+              "bodyPreview": "@{triggerBody()?['bodyPreview']}",
+              "from": "@triggerBody()?['from']",
+              "toRecipients": "@triggerBody()?['toRecipients']",
+              "receivedDateTime": "@{triggerBody()?['receivedDateTime']}",
+              "hasAttachments": "@triggerBody()?['hasAttachments']",
+              "importance": "@{triggerBody()?['importance']}",
+              "conversationId": "@{triggerBody()?['conversationId']}",
+              "attachments": "@variables('attachments')",
+              "statusHistory": "@variables('statusHistory')"
+            },
+            "path": "/v2/cosmosdb/@{encodeURIComponent('__COSMOS_ACCOUNT__')}/dbs/@{encodeURIComponent('email-analyzer-db')}/colls/@{encodeURIComponent('emails')}/docs",
+            "headers": {
+              "x-ms-documentdb-is-upsert": "True"
+            }
+          },
+          "runAfter": {
+            "Append_Attachments_Processed_Status": [
+              "Succeeded"
+            ]
+          }
+        }
+      },
+      "else": {
+        "actions": {}
+      },
+      "runAfter": {
+        "For_Each_Attachment": [
+          "Succeeded"
+        ]
       }
     },
     "Classify_Email": {
@@ -251,7 +375,7 @@
         }
       },
       "runAfter": {
-        "For_Each_Attachment": [
+        "Check_Has_Attachments": [
           "Succeeded"
         ]
       }
@@ -265,7 +389,22 @@
         ]
       }
     },
-    "Create_or_Update_Cosmos_Document": {
+    "Append_Classified_Status": {
+      "type": "AppendToArrayVariable",
+      "inputs": {
+        "name": "statusHistory",
+        "value": {
+          "status": "Email classified",
+          "timestamp": "@{utcNow()}"
+        }
+      },
+      "runAfter": {
+        "Parse_Classification": [
+          "Succeeded"
+        ]
+      }
+    },
+    "Update_Cosmos_Final": {
       "type": "ApiConnection",
       "inputs": {
         "host": {
@@ -289,7 +428,7 @@
           "attachments": "@variables('attachments')",
           "classification": "@outputs('Parse_Classification')",
           "processedAt": "@{utcNow()}",
-          "status": "classified"
+          "statusHistory": "@variables('statusHistory')"
         },
         "path": "/v2/cosmosdb/@{encodeURIComponent('__COSMOS_ACCOUNT__')}/dbs/@{encodeURIComponent('email-analyzer-db')}/colls/@{encodeURIComponent('emails')}/docs",
         "headers": {
@@ -297,11 +436,11 @@
         }
       },
       "runAfter": {
-        "For_Each_Attachment": [
+        "Check_Has_Attachments": [
           "Succeeded",
           "Failed"
         ],
-        "Parse_Classification": [
+        "Append_Classified_Status": [
           "Succeeded",
           "Failed",
           "Skipped"
