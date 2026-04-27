@@ -83,6 +83,14 @@ else
   echo "  (storage account already exists)"
 fi
 
+# Ensure shared key access is enabled (required by Functions runtime for file shares)
+echo "  Ensuring shared key access is enabled on storage account..."
+az storage account update \
+  --name "$FUNCTION_STORAGE" \
+  --resource-group "$RESOURCE_GROUP" \
+  --allow-shared-key-access true \
+  --output none
+
 FUNCTION_STORAGE_CONNECTION=$(az storage account show-connection-string \
   --name "$FUNCTION_STORAGE" \
   --resource-group "$RESOURCE_GROUP" \
