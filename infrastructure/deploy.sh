@@ -374,12 +374,13 @@ az role assignment create \
   --scope "$STORAGE_RESOURCE_ID" \
   --output none 2>/dev/null || echo "    (already assigned)"
 
-# Container App MI → Cosmos DB Built-in Data Reader
-echo "  ▸ Container App → Cosmos DB Data Reader..."
+# Container App MI → Cosmos DB Built-in Data Contributor
+# Contributor (not Reader) — the web app needs delete permission for DELETE /api/emails/:id
+echo "  ▸ Container App → Cosmos DB Data Contributor..."
 az cosmosdb sql role assignment create \
   --account-name "$COSMOS_ACCOUNT" \
   --resource-group "$RESOURCE_GROUP" \
-  --role-definition-id "00000000-0000-0000-0000-000000000001" \
+  --role-definition-id "00000000-0000-0000-0000-000000000002" \
   --principal-id "$CONTAINER_APP_PRINCIPAL_ID" \
   --scope "/" \
   --output none 2>/dev/null || echo "    (already assigned)"
@@ -442,7 +443,7 @@ if [ -n "$FOUNDRY_RESOURCE_ID" ]; then
 fi
 echo "  Container App MI ($CONTAINER_APP_PRINCIPAL_ID):"
 echo "    → Storage Blob Data Reader on $STORAGE_ACCOUNT"
-echo "    → Cosmos DB Built-in Data Reader (00000000-0000-0000-0000-000000000001)"
+echo "    → Cosmos DB Built-in Data Contributor (00000000-0000-0000-0000-000000000002)"
 echo ""
 echo "Security:"
 echo "  ✓ Storage shared key access: DISABLED"

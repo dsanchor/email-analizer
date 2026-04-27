@@ -306,3 +306,12 @@
 - **Decision doc:** `.squad/decisions/inbox/ripley-status-history.md`
 
 ---
+
+### Session: Cosmos DB RBAC Fix — Container App Delete Permission
+- **Problem:** Container App MI had `Cosmos DB Built-in Data Reader` (00000000-0000-0000-0000-000000000001) which blocks delete operations needed by `DELETE /api/emails/:id`
+- **Fix:** Upgraded to `Cosmos DB Built-in Data Contributor` (00000000-0000-0000-0000-000000000002) — includes read, create, replace, AND delete
+- **Files changed:** `infrastructure/deploy.sh`, `README.md`, `docs/architecture.md`, `.squad/decisions.md`
+- **Pattern:** When a web app needs full CRUD on Cosmos DB, always use Data Contributor, not Data Reader
+- **Note:** `redeploy-logic-app.sh` has no role assignments — safe, no changes needed
+
+---

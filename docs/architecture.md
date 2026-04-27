@@ -287,7 +287,7 @@ All service-to-service communication uses Azure Managed Identities. **Zero conne
 | Target Resource | Role | Purpose |
 |----------------|------|---------|
 | Storage Account | **Storage Blob Data Reader** | Read/download attachment blobs |
-| Cosmos DB Account | **Cosmos DB Built-in Data Reader** | Query email documents |
+| Cosmos DB Account | **Cosmos DB Built-in Data Contributor** | Query, create, and delete email documents |
 
 ### Role Assignment Reference
 

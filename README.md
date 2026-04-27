@@ -269,7 +269,7 @@ This solution uses **zero connection strings**. All service-to-service authentic
 | Logic App | Content Understanding (optional) | Cognitive Services User |
 | Logic App | Foundry AI project (optional) | Azure AI User |
 | Container App | Blob Storage | Storage Blob Data Reader |
-| Container App | Cosmos DB | Cosmos DB Built-in Data Reader |
+| Container App | Cosmos DB | Cosmos DB Built-in Data Contributor |
 
 The only interactive authentication is the **Office 365 OAuth consent** — a one-time step in the Azure Portal under **API Connections → office365 → Edit API connection → Authorize**.
 

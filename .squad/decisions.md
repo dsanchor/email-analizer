@@ -33,7 +33,7 @@
 | Logic App | Storage | Storage Blob Data Contributor | ba92f5b4-2d11-453d-a403-e96b0029c9fe |
 | Logic App | Cosmos DB | Cosmos DB Built-in Data Contributor | 00000000-0000-0000-0000-000000000002 |
 | Container App | Storage | Storage Blob Data Reader | 2a2b9908-6ea1-4ae2-8e65-a410df84e7d1 |
-| Container App | Cosmos DB | Cosmos DB Built-in Data Reader | 00000000-0000-0000-0000-000000000001 |
+| Container App | Cosmos DB | Cosmos DB Built-in Data Contributor | 00000000-0000-0000-0000-000000000002 |
 | Container App | ghcr.io | (pull via GHCR credentials on Container App) | — |
 
 #### Web Framework
