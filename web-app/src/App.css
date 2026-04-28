@@ -216,9 +216,9 @@ a:hover { text-decoration: underline; }
   white-space: nowrap;
 }
 
-.email-table__th--date { width: 180px; }
-.email-table__th--from { width: 220px; }
-.email-table__th--subject { width: auto; }
+.email-table__th--date { width: 120px; }
+.email-table__th--from { width: 140px; }
+.email-table__th--subject { width: 500px; }
 
 .sortable {
   cursor: pointer;
@@ -782,10 +782,11 @@ a:hover { text-decoration: underline; }
   .inbox__header { flex-direction: column; align-items: flex-start; }
   .inbox__search-input { width: 100%; }
   .inbox__search { width: 100%; }
-  .email-table__th--date { width: 140px; }
-  .email-table__th--from { width: 160px; }
-  .email-table__th--type { width: 120px; }
-  .email-table__th--score { width: 70px; }
+  .email-table__th--date { width: 110px; }
+  .email-table__th--from { width: 130px; }
+  .email-table__th--subject { width: 300px; }
+  .email-table__th--type { width: 100px; }
+  .email-table__th--score { width: 60px; }
 }
 
 @media (max-width: 640px) {
