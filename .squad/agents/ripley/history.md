@@ -367,4 +367,51 @@
 - **Key files:** `infrastructure/deploy-azure-function.sh`
 - **Decision doc:** `.squad/decisions/inbox/ripley-appservice-plan.md`
 
+### Session: Add Mortgage Inquiry Classification Category
+- **Task:** Add new `mortgage_inquiry` classification category to EmailClassifierAgent
+- **Changes made:**
+  1. `foundry-agent/create_classifier_agent.py`:
+     - Added `mortgage_inquiry` category after `sales_inquiry` in Categories section (line 46-47)
+     - Description covers: customer interest in mortgages, inquiries about rates/terms/conditions/requirements, mortgage product applications
+     - Added example email in Examples section (line 88-90): customer asking about mortgage rates and application requirements
+     - High confidence score (96) due to explicit intent
+- **Pattern:** New classification categories follow the same structure: (1) category definition with dash bullet, (2) concise description covering inquiry types, (3) realistic example with JSON response
+- **Impact:** EmailClassifierAgent now has 14 classification types (added to previous 13). No Logic App or web app changes needed — agent behavior updates automatically on next deployment.
+- **Key file:** `foundry-agent/create_classifier_agent.py`
+
+---
+## Learnings
+
+### Session: Rule 3 — Component-Based IBAN Validation
+- **Task:** Update bank account validation rule to validate IBAN as individual components instead of a single string
+- **Change:** Rule 3 in `foundry-agent/create_validation_agent.py` VALIDATION_INSTRUCTIONS now requires five separate fields: Iban (country+check), Bank (4-digit), Branch (4-digit), DC (2-digit control), Account (number)
+- **Pattern:** When changing agent prompt instructions, update three spots: rule description, status/detail guidance text, and the example output JSON to stay consistent
+- **CSV unchanged:** CSV (Código Seguro de Verificación) validation remains alongside the bank components
+- **Key file:** `foundry-agent/create_validation_agent.py`
+
+### Session: PersonalInformationValidationAgent Implementation
+- **Task:** Create validation agent and integrate with Azure Function to validate personal documents from emails
+- **Solution:** Created `PersonalInformationValidationAgent` following exact pattern as `EmailClassifierAgent`
+  - Agent script: `foundry-agent/create_validation_agent.py`
+  - Validates IRPF and Vida Laboral documents against 4 business rules:
+    1. Required Documents (both IRPF and Vida Laboral present)
+    2. Name Consistency (full name matches across documents)
+    3. Bank Account & CSV (IBAN and CSV code in IRPF)
+    4. CEA Code Consistency (same CEA across all pages in Vida Laboral)
+  - Returns structured JSON: `{"title": "Validation", "statements": [{"rule": "...", "status": "pass|fail", "detail": "..."}]}`
+- **Integration:** Updated Azure Function to call agent instead of mock data
+  - Used `urllib.request` for HTTP POST to Responses API (consistent with invoke_agent.py pattern)
+  - Managed identity auth with `credential.get_token("https://ai.azure.com/.default")`
+  - Request URL: `{FOUNDRY_AGENT_ENDPOINT}/applications/{VALIDATION_AGENT_APP_NAME}/protocols/openai/responses?api-version=2025-11-15-preview`
+  - Payload: `{"input": "<document_data_as_json_string>"}`
+  - Error handling: captures HTTP errors and JSON parse errors, returns structured error in agentResult
+  - Status update: "Processed by agent" on success, "Agent processing failed" on error
+- **Configuration:**
+  - Added `FOUNDRY_AGENT_ENDPOINT` and `VALIDATION_AGENT_APP_NAME` env vars to function app settings
+  - Default app name: `personal-info-validator`
+  - Updated `infrastructure/deploy-azure-function.sh` to set these during deployment
+- **Publishing:** Updated `publish_agent.sh` to document how to publish validation agent by setting `APPLICATION_NAME=personal-info-validator` and `AGENT_NAME=PersonalInformationValidationAgent`
+- **Pattern:** Same agent creation pattern (AIProjectClient, PromptAgentDefinition, async/await), same invocation pattern (Responses API, managed identity), makes adding new agents trivial
+- **Key files:** `foundry-agent/create_validation_agent.py`, `azure-function/function_app.py`, `infrastructure/deploy-azure-function.sh`, `foundry-agent/publish_agent.sh`
+
 ---
