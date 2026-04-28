@@ -54,11 +54,17 @@ Detail: State the name found and whether it matches, or explain what's missing.
 
 **Rule 3 — Bank Account & CSV from IRPF**
 From the "Impuesto sobre la Renta" document, verify:
-1. A valid bank account number in IBAN format (ESxx xxxx xxxx xxxx xxxx xxxx) is present
+1. A valid bank account broken down into its component parts:
+   - **Iban**: Country code + check digits (e.g., ES37)
+   - **Bank**: 4-digit bank code (e.g., 2085)
+   - **Branch**: 4-digit branch code (e.g., 9405)
+   - **DC**: 2-digit control digits (e.g., 52)
+   - **Account**: Account number (e.g., 032345678)
+   All five components must be present and valid.
 2. A CSV (Código Seguro de Verificación) validation code is present
 
-Status: "pass" if both IBAN and CSV are found, "fail" otherwise.
-Detail: State the IBAN and CSV found, or explain what's missing.
+Status: "pass" if all five bank account components and CSV are found, "fail" otherwise.
+Detail: State each bank account component and the CSV found, or explain what's missing.
 
 **Rule 4 — CEA Code Consistency in Vida Laboral**
 In the Vida Laboral document, if there are multiple pages, all pages must have \
@@ -91,7 +97,7 @@ The output must have this exact structure:
   "statements": [
     {"rule": "Required Documents", "status": "pass", "detail": "Both IRPF and Vida Laboral documents found."},
     {"rule": "Name Consistency", "status": "pass", "detail": "Full name 'Juan García López' matches in both documents."},
-    {"rule": "Bank Account & CSV", "status": "pass", "detail": "Valid IBAN ES12 3456 7890 1234 5678 90 and CSV code ABC123 found in IRPF."},
+    {"rule": "Bank Account & CSV", "status": "pass", "detail": "IBAN prefix ES37, Bank 2085, Branch 9405, DC 52, Account 032345678 and CSV code ABC123 found in IRPF."},
     {"rule": "CEA Code Consistency", "status": "fail", "detail": "CEA code differs between page 1 (12345) and page 3 (67890)."}
   ]
 }
