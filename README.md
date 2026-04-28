@@ -29,7 +29,7 @@ An Azure-native email processing pipeline that automatically captures incoming e
                     └──────────────┘
 ```
 
-The Logic App triggers on new emails, extracts metadata, stores attachments in Blob Storage, calls **Content Understanding** for PDF field extraction and a **Foundry Agent** to classify each email, then writes structured documents (with classification and analysis results) to Cosmos DB. A Node.js web app (Express + React) on Azure Container Apps reads from both stores and presents emails with a clean, modern UI. Optionally, an **Azure Function** watches the Cosmos DB change feed to process classified emails further.
+The Logic App triggers on new emails, extracts metadata, stores attachments in Blob Storage, calls **Content Understanding** for PDF field extraction and a **Foundry Agent** to classify each email, then writes structured documents (with classification and analysis results) to Cosmos DB. A Node.js web app (Express + React) on Azure Container Apps reads from both stores and presents emails with a clean, modern UI. Optionally, an **Azure Function** watches the Cosmos DB change feed and calls the **PersonalInformationValidationAgent** in Foundry to validate documents against 5 business rules, storing validation statements back in Cosmos DB.
 
 **Full architecture details:** [`docs/architecture.md`](docs/architecture.md)
 **Design system:** [`DESIGN.md`](DESIGN.md)
@@ -81,7 +81,7 @@ After creation, set these variables when deploying the Logic App:
 
 ### 2. Azure AI Foundry — Validation Agent (Optional, for Azure Function)
 
-If you plan to use the optional Azure Function for change feed processing, create a **PersonalInformationValidationAgent** that validates documents against 4 business rules:
+If you plan to use the optional Azure Function for change feed processing, create a **PersonalInformationValidationAgent** that validates documents against 5 business rules:
 
 ```bash
 cd foundry-agent
@@ -95,6 +95,13 @@ Set these variables before deploying the Azure Function:
 | `FOUNDRY_AGENT_ENDPOINT` | Same as above (classifier agent endpoint) |
 | `FOUNDRY_RESOURCE_ID` | Same as above — needed to assign roles to the Function App MI |
 | `VALIDATION_AGENT_NAME` | The validation agent name (default: `PersonalInformationValidationAgent`) |
+
+**Validation Rules:** The agent checks documents against these 5 rules:
+1. **Required Documents** — Ensures all mandatory documents are present
+2. **Name Consistency** — Validates that names match order-independently (name parts order-agnostic)
+3. **Bank Account** — Verifies IBAN structure (5 components: prefix, bank, branch, check digit, account)
+4. **CSV Code** — Confirms CSV code presence and validity
+5. **CEA Code Consistency** — Ensures CEA code consistency across documents
 
 ### 2. Azure AI Content Understanding — PDF Analysis (Optional)
 
@@ -138,7 +145,7 @@ The deploy script grants the Logic App's managed identity `Cognitive Services Us
 
 ### 4. Azure Function — Cosmos DB Change Feed Processor (Optional)
 
-An optional Python Azure Function processes emails after they've been classified. It watches the Cosmos DB change feed for documents where the latest status is `"Email classified"`, then calls the **PersonalInformationValidationAgent** in Azure AI Foundry to validate the email against 4 business rules (Required Documents, Name Consistency, Bank Account & CSV, CEA Code Consistency).
+An optional Python Azure Function processes emails after they've been classified. It watches the Cosmos DB change feed for documents where the latest status is `"Email classified"`, then calls the **PersonalInformationValidationAgent** in Azure AI Foundry to validate the email against 5 business rules (Required Documents, Name Consistency, Bank Account, CSV Code, CEA Code Consistency).
 
 **What it does:**
 
@@ -146,6 +153,46 @@ An optional Python Azure Function processes emails after they've been classified
 - Monitors the `statusHistory` array for the latest status
 - When a document is classified: calls the Foundry validation agent, appends a new status, adds `agentResult` field with validation statements
 - Uses managed identity (zero connection strings) for Cosmos DB and Foundry access
+
+#### Validation Agent Integration
+
+The Azure Function calls the **PersonalInformationValidationAgent** via the Azure AI Foundry Responses API:
+
+**Authentication:**
+- Uses `DefaultAzureCredential` for both Cosmos DB and Foundry access
+- Token audience for Foundry API: `https://ai.azure.com/.default`
+- Requires `Azure AI User` role on the Foundry AI project
+
+**Foundry API Call:**
+- Endpoint: `{FOUNDRY_AGENT_ENDPOINT}/openai/responses?api-version=2025-11-15-preview`
+- Method: `POST` with JSON body containing document metadata
+- Returns: Agent response with validation statements
+
+**Result Format:**
+The function stores agent results in the Cosmos DB document as a structured `agentResult` field:
+
+```json
+{
+  "agentResult": {
+    "title": "Document Validation Results",
+    "statements": [
+      {"rule": "Required Documents", "status": "pass", "detail": "All required documents present"},
+      {"rule": "Name Consistency", "status": "pass", "detail": "Names match across documents"},
+      {"rule": "Bank Account", "status": "pass", "detail": "IBAN valid: XX-0001-2345-67890"},
+      {"rule": "CSV Code", "status": "pass", "detail": "CSV code valid"},
+      {"rule": "CEA Code Consistency", "status": "pass", "detail": "CEA codes consistent"}
+    ]
+  }
+}
+```
+
+Each statement has:
+- `rule`: The validation rule name
+- `status`: `"pass"` or `"fail"`
+- `detail`: Human-readable explanation or validation details
+
+**Error Handling:**
+If the Foundry agent call fails, the function appends a status record and logs the error without blocking Cosmos DB reads. The web app gracefully displays "validation pending" when `agentResult` is absent.
 
 **Environment variables (set automatically by deploy script):**
 

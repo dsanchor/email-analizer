@@ -23,7 +23,7 @@
 │                            │  ▼                          │            │
 │                            │ ┌──────────────────┐        │            │
 │                            │ │  Foundry Agent    │        │            │
-│                            │ │  (AI Foundry)     │        │            │
+│                            │ │  (Classification) │        │            │
 │                            │ └──────────────────┘        │            │
 │                            ▼                             │            │
 │                         ┌──────────────┐                  │            │
@@ -33,20 +33,26 @@
 │                         │  serverless  │      │          │            │
 │                         └──────┬───────┘      │          │            │
 │                                │ query       │ (opt)    │            │
-│                                │             │          │            │
-│                    ┌───────────────────────────┼──────┐  │            │
-│                    │                           │      │  │            │
-│                    ▼                           ▼      ▼  ▼            │
-│         ┌────────────────────────────────────────┐   ┌──────────┐    │
-│         │                                        │   │  Azure   │    │
-│         │     Azure Container Apps               │   │ Function │    │
-│         │     (Web App — Node.js/React)          │   │(Processor)   │
-│         │                                        │   └──────────┘    │
-│         └────────────────────────────────────────┘                   │
-│                                 │                                     │
-│                                 ▼                                     │
-│                            End Users                                  │
-│                           (Browser)                                   │
+│                    ┌───────────┼──────────────┼──────────┼────┐       │
+│                    │           │              │          │    │       │
+│                    │           ▼              ▼          ▼    │       │
+│                    │ ┌──────────────────┐ ┌──────────┐       │       │
+│                    │ │                  │ │  Azure   │       │       │
+│  ┌────────────────────────────────────┐ │ │ Function │       │       │
+│  │    Azure Container Apps            │ │ │(Processor)       │       │
+│  │    (Web App — Node.js/React)       │ │ └──────────┘       │       │
+│  │                                    │ │      │ call to    │       │
+│  └────────────────────────────────────┘ │      │ Validation │       │
+│         │                                │      │ Agent      │       │
+│         ▼                                │      ▼            │       │
+│    End Users                             │  ┌──────────────────┐    │
+│    (Browser)                             │  │  Foundry Agent    │    │
+│                                          │  │  (Validation)     │    │
+│                                          │  └──────────────────┘    │
+│                                          │           │              │
+│                                          │           ▼              │
+│                                          └─── Update Cosmos DB ─────┘
+│                                                                       │
 └─────────────────────────────────────────────────────────────────────────┘
 ```
 
@@ -63,12 +69,20 @@
 4. Logic App calls Foundry Agent (Response API) with subject + body for classification
    - Returns: {"type": "...", "score": N, "reasoning": "..."}
 5. Logic App upserts email document with attachments + classification to Cosmos DB
+   - Sets status to "classified"
+   - Adds statusHistory entry: {"status": "Email classified", "timestamp": "..."}
 6. [OPTIONAL] Azure Function is triggered by Cosmos DB change feed:
    a. Detects document with statusHistory ending in "Email classified"
    b. Calls PersonalInformationValidationAgent via Foundry Responses API
-   c. Appends "Processed by agent" status entry (or "Agent processing failed" on error)
-   d. Adds agentResult with structured validation statements (rule, status, detail)
-   e. Updates document in Cosmos DB
+      - Endpoint: {FOUNDRY_AGENT_ENDPOINT}/openai/responses?api-version=2025-11-15-preview
+      - Auth: DefaultAzureCredential with token audience https://ai.azure.com/.default
+      - Validates against 5 rules: Required Documents, Name Consistency (order-independent), 
+        Bank Account (5 IBAN components), CSV Code, CEA Code Consistency
+   c. Parses structured agent response with individual rule statements (rule, status, detail)
+   d. Appends new statusHistory entry: {"status": "Processed by agent", "timestamp": "..."} 
+      (or "Agent processing failed" on error)
+   e. Adds/updates agentResult field with validation statements
+   f. Updates document in Cosmos DB
 7. Web App queries Cosmos DB for email list / detail
 8. Web App streams attachments from Blob Storage via managed identity
 9. Web App renders classification (type badge, score, reasoning), CU results, and agent validation status
@@ -319,6 +333,105 @@ For each PDF attachment, the Logic App calls the Content Understanding REST API:
 
 ---
 
+## Azure Function — Change Feed Processor
+
+**Type:** Azure Function App (Python 3.11, Consumption plan, Linux)
+**Trigger:** Cosmos DB change feed on `emails` container
+**Purpose:** Validate email documents against business rules via Foundry AI agent
+
+### Processing Pipeline
+
+The function is **optional** and processes emails asynchronously after Logic App classification:
+
+```
+Cosmos DB Change Feed ──▶ Change feed trigger (polls leases container)
+                              │
+                              ▼
+                    Check statusHistory
+                              │
+                    ┌─────────┴──────────┐
+                    │                    │
+          "Email classified"      Other status (skip)
+                    │
+                    ▼
+    Call Foundry PersonalInformationValidationAgent
+    POST {FOUNDRY_AGENT_ENDPOINT}/openai/responses?api-version=2025-11-15-preview
+    Auth: DefaultAzureCredential (token audience: https://ai.azure.com/.default)
+                    │
+                    ▼
+         Parse structured validation response
+                    │
+                    ▼
+    Append statusHistory entry + agentResult
+                    │
+                    ▼
+    Update Cosmos DB document
+```
+
+### Validation Rules
+
+The **PersonalInformationValidationAgent** validates documents against 5 business rules:
+
+1. **Required Documents** — All mandatory documents present in submission
+2. **Name Consistency** — Customer name matches across all documents (order-independent comparison)
+3. **Bank Account (5 IBAN components)** — Account format valid (country code, check digits, account identifier, etc.)
+4. **CSV Code** — Specific code format validation in CSV data
+5. **CEA Code Consistency** — Insurance code consistent throughout submission
+
+Each rule produces a structured statement:
+```json
+{
+  "rule": "Required Documents",
+  "status": "pass",
+  "detail": "All required documents are present"
+}
+```
+
+Possible status values: `pass`, `fail`, `warning`, or `unknown`.
+
+### Agent Result Storage
+
+Results are stored in the Cosmos DB document as:
+
+```json
+{
+  "agentResult": {
+    "title": "Validation",
+    "statements": [
+      { "rule": "Required Documents", "status": "pass", "detail": "..." },
+      { "rule": "Name Consistency", "status": "pass", "detail": "..." },
+      { "rule": "Bank Account (5 IBAN components)", "status": "fail", "detail": "..." },
+      { "rule": "CSV Code", "status": "pass", "detail": "..." },
+      { "rule": "CEA Code Consistency", "status": "pass", "detail": "..." }
+    ]
+  },
+  "statusHistory": [
+    { "status": "Email received", "timestamp": "..." },
+    { "status": "Email classified", "timestamp": "..." },
+    { "status": "Processed by agent", "timestamp": "..." }
+  ]
+}
+```
+
+### Environment Configuration
+
+| Variable | Description | Example |
+|----------|-------------|---------|
+| `COSMOS_ENDPOINT` | Cosmos DB endpoint | `https://cosmos-xxx.documents.azure.com:443/` |
+| `COSMOS_DATABASE` | Database name | `email-analyzer-db` |
+| `COSMOS_CONTAINER` | Container name | `emails` |
+| `COSMOS_CONNECTION__accountEndpoint` | Change feed trigger binding connection | (same as COSMOS_ENDPOINT) |
+| `FOUNDRY_AGENT_ENDPOINT` | Azure AI Foundry project endpoint | `https://xxx.services.ai.azure.com/api/projects/xxx` |
+| `VALIDATION_AGENT_NAME` | Name of validation agent in Foundry | `PersonalInformationValidationAgent` |
+
+### Error Handling
+
+- If Foundry agent call fails → Appends `"Agent processing failed"` to statusHistory, skips agentResult write
+- If Cosmos update fails → Function logs error and allows automatic retry via change feed
+- Document skipped if statusHistory does not end with `"Email classified"` (idempotency check)
+
+---
+
 ## Managed Identity Roles
 
 All service-to-service communication uses Azure Managed Identities. **Zero connection strings** in the solution.
@@ -455,12 +568,21 @@ All service-to-service communication uses Azure Managed Identities. **Zero conne
 │  ├── Function App (Linux, Python 3.11, Consumption)             │
 │  ├── Dedicated Storage Account (function runtime internals)      │
 │  ├── Lease Container in Cosmos DB (change feed tracking)         │
-│  └── Managed Identity Role Assignment (Cosmos DB access)         │
+│  ├── Managed Identity Role Assignments:                          │
+│  │   ├── Cosmos DB Built-in Data Contributor                   │
+│  │   └── Azure AI User (on Foundry project)                     │
+│  └── Cosmos DB change feed trigger binding configuration         │
+│                                                                  │
+│  foundry-agent/create_validation_agent.py (OPTIONAL)            │
+│  └── Provisions PersonalInformationValidationAgent in Foundry    │
+│                                                                  │
+│  foundry-agent/publish_agent.sh (OPTIONAL)                      │
+│  └── Publishes validation agent as Agent Application            │
 │                                                                  │
 │  Post-deploy (manual):                                           │
 │  ├── Configure O365 connector (interactive OAuth consent)        │
-│  └── Update Container App with ghcr.io image                    │
-│  └── [OPTIONAL] Run deploy-azure-function.sh for change feed processing
+│  ├── Update Container App with ghcr.io image                    │
+│  └── [OPTIONAL] Configure Foundry agent endpoint in Function App│
 └─────────────────────────────────────────────────────────────────┘
 ```
 

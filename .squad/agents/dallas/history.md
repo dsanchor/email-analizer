@@ -20,3 +20,12 @@
 - **Foundry Token Audience:** `https://ai.azure.com/.default` for Responses API calls from Azure services
 - **Azure Function Auth:** Uses `DefaultAzureCredential` for both Cosmos DB and Foundry access; requires `Azure AI User` role on Foundry project
 - **Documentation Pattern:** All docs updated to reflect real agent integration — azure-function/README.md, root README.md (sections 1-4), docs/architecture.md (component flow, schema, roles, project structure)
+- **Architecture Documentation Update (2026-04-27):**
+  - Enhanced Component Interaction Flow with explicit Azure Function details: Foundry Responses API endpoint (`/openai/responses?api-version=2025-11-15-preview`), DefaultAzureCredential with audience `https://ai.azure.com/.default`, and all 5 validation rules (Required Documents, Name Consistency order-independent, Bank Account 5 IBAN components, CSV Code, CEA Code Consistency)
+  - Added dedicated "Azure Function — Change Feed Processor" section with processing pipeline diagram, validation rules detail, agent result storage format, environment variables, and error handling
+  - Updated solution diagram to show Azure Function and Validation Agent flow explicitly
+  - Enhanced Deployment Architecture to include Function App role assignments and Foundry agent provisioning scripts
+  - Clarified statusHistory flow: "Email classified" → change feed trigger → "Processed by agent"
+  - Fixed duplicate separator in Managed Identity Roles section
+  - All changes maintain consistency with azure-function/README.md and decisions.md
+- **README Validation Agent Documentation (2026-04-27):** Updated README.md to document the Azure Function's call to PersonalInformationValidationAgent. Added authentication details (DefaultAzureCredential, `https://ai.azure.com/.default` audience), Foundry Responses API endpoint pattern (`{FOUNDRY_AGENT_ENDPOINT}/openai/responses?api-version=2025-11-15-preview`), clarified 5 validation rules (Required Documents, Name Consistency, Bank Account with IBAN structure, CSV Code, CEA Code Consistency), detailed `agentResult` format with structured statements, and updated architecture section to show change feed → validation → Cosmos update flow. Keeps existing sections intact (no duplication), integrates new content into section 4 (Azure Function) for clear, hierarchical documentation.
