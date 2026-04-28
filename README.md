@@ -18,15 +18,17 @@ An Azure-native email processing pipeline that automatically captures incoming e
                                 │    └─────────────────────┘
                                 ▼
                      Cosmos DB + Blob Storage ◀── Web App ◀── Users
-                        ▲
-                        │ (optional)
-                        │ change feed
-                    ┌───┴──────────┐
-                    │              │
-                    │  Azure       │
-                    │  Function    │
-                    │  (processor) │
-                    └──────────────┘
+                        ▲       │
+                        │       │ (optional)
+                        │       │ change feed
+                        │   ┌───▼──────────┐    ┌─────────────────────┐
+                        │   │              │    │  Foundry Agent       │
+                        │   │  Azure       ├───▶│  (validation)       │
+                        │   │  Function    │    └─────────────────────┘
+                        │   │  (processor) │
+                        │   └───┬──────────┘
+                        │       │
+                        └───────┘ (update results)
 ```
 
 The Logic App triggers on new emails, extracts metadata, stores attachments in Blob Storage, calls **Content Understanding** for PDF field extraction and a **Foundry Agent** to classify each email, then writes structured documents (with classification and analysis results) to Cosmos DB. A Node.js web app (Express + React) on Azure Container Apps reads from both stores and presents emails with a clean, modern UI. Optionally, an **Azure Function** watches the Cosmos DB change feed and calls the **PersonalInformationValidationAgent** in Foundry to validate documents against 5 business rules, storing validation statements back in Cosmos DB.
