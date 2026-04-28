@@ -414,4 +414,12 @@
 - **Pattern:** Same agent creation pattern (AIProjectClient, PromptAgentDefinition, async/await), same invocation pattern (Responses API, managed identity), makes adding new agents trivial
 - **Key files:** `foundry-agent/create_validation_agent.py`, `azure-function/function_app.py`, `infrastructure/deploy-azure-function.sh`, `foundry-agent/publish_agent.sh`
 
+### Session: Filter_Array for Classification Output Parsing
+- **Problem:** `Parse_Classification` used `body('Classify_Email')?['output'][1]` — hardcoded index assumes message block is always at position 1. Foundry agent output array can contain `reasoning` and `message` elements in any order.
+- **Fix:** Added `Filter_Classification_Output` (type: Query) action that filters the output array for `item()?['type'] == 'message'`. `Parse_Classification` now uses `first(body('Filter_Classification_Output'))?['content'][0]?['text']` to dynamically get the message element.
+- **Action chain:** `Classify_Email` → `Filter_Classification_Output` → `Parse_Classification` → `Append_Classified_Status` → `Update_Cosmos_Final`
+- **Pattern:** When parsing multi-element API response arrays, use Filter_Array (Query action) + `first()` instead of hardcoded indices — makes the workflow resilient to element reordering.
+- **Key file:** `logic-app/workflow.json`
+- **Decision doc:** `.squad/decisions/inbox/ripley-classification-output-filter.md`
+
 ---
