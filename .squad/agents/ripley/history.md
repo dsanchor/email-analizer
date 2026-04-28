@@ -422,4 +422,18 @@
 - **Key file:** `logic-app/workflow.json`
 - **Decision doc:** `.squad/decisions/inbox/ripley-classification-output-filter.md`
 
+### Session: Validation Agent — Split Rules & Name Ordering Fix
+- **Task:** Update validation agent prompt with two changes
+- **Change 1 — Split Bank Account & CSV into separate rules:**
+  - Old Rule 3 (Bank Account & CSV) split into Rule 3 (Bank Account only) and Rule 4 (CSV Code only)
+  - Old Rule 4 (CEA Code Consistency) renumbered to Rule 5
+  - Output format, example output, and closing instruction updated from 4 rules to 5
+- **Change 2 — Name consistency now order-independent:**
+  - Rule 2 no longer requires exact string match
+  - Agent now extracts individual name parts (first name, surnames) and compares as a SET
+  - Handles "García López, Juan" vs "Juan García López" across documents
+  - Example output shows set-based comparison detail
+- **Pattern:** When updating agent prompts, always update 3 sections in sync: rule description, output format schema, and example output
+- **Key file:** `foundry-agent/create_validation_agent.py`
+
 ---
