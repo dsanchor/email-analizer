@@ -48,7 +48,7 @@ echo "  Cosmos Container:      $COSMOS_CONTAINER"
 echo "  Lease Container:       $LEASE_CONTAINER"
 if [ -n "$FOUNDRY_AGENT_ENDPOINT" ]; then
   echo "  Foundry Endpoint:      $FOUNDRY_AGENT_ENDPOINT"
-  echo "  Foundry Resource ID:   ${FOUNDRY_RESOURCE_ID:-(not set — AI User role won't be assigned)}"
+  echo "  Foundry Resource ID:   ${FOUNDRY_RESOURCE_ID:-(not set — AI User role wont be assigned)}"
   echo "  Validation Agent App:  $VALIDATION_AGENT_NAME"
 fi
 echo ""
