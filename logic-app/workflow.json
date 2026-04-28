@@ -380,11 +380,23 @@
         ]
       }
     },
-    "Parse_Classification": {
-      "type": "Compose",
-      "inputs": "@json(body('Classify_Email')?['output'][1]?['content'][0]?['text'])",
+    "Filter_Classification_Output": {
+      "type": "Query",
+      "inputs": {
+        "from": "@body('Classify_Email')?['output']",
+        "where": "@equals(item()?['type'], 'message')"
+      },
       "runAfter": {
         "Classify_Email": [
+          "Succeeded"
+        ]
+      }
+    },
+    "Parse_Classification": {
+      "type": "Compose",
+      "inputs": "@json(first(body('Filter_Classification_Output'))?['content'][0]?['text'])",
+      "runAfter": {
+        "Filter_Classification_Output": [
           "Succeeded"
         ]
       }
