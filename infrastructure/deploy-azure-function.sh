@@ -27,6 +27,11 @@ FUNCTION_APP="${FUNCTION_APP:-email-analyzer-func}"
 FUNCTION_STORAGE="${FUNCTION_STORAGE:-emailanalyzerfuncstor}"
 APP_SERVICE_PLAN="${APP_SERVICE_PLAN:-email-analyzer-func-plan}"
 
+# Foundry Agent — required for validation agent calls
+FOUNDRY_AGENT_ENDPOINT="${FOUNDRY_AGENT_ENDPOINT:-}"
+FOUNDRY_RESOURCE_ID="${FOUNDRY_RESOURCE_ID:-}"
+VALIDATION_AGENT_APP_NAME="${VALIDATION_AGENT_APP_NAME:-personal-info-validator}"
+
 echo "╔══════════════════════════════════════════════════════════════╗"
 echo "║  Email Analyzer — Azure Function Deployment                  ║"
 echo "╚══════════════════════════════════════════════════════════════╝"
@@ -41,6 +46,11 @@ echo "  App Service Plan:      $APP_SERVICE_PLAN"
 echo "  Cosmos Database:       $COSMOS_DB"
 echo "  Cosmos Container:      $COSMOS_CONTAINER"
 echo "  Lease Container:       $LEASE_CONTAINER"
+if [ -n "$FOUNDRY_AGENT_ENDPOINT" ]; then
+  echo "  Foundry Endpoint:      $FOUNDRY_AGENT_ENDPOINT"
+  echo "  Foundry Resource ID:   ${FOUNDRY_RESOURCE_ID:-(not set — AI User role won't be assigned)}"
+  echo "  Validation Agent App:  $VALIDATION_AGENT_APP_NAME"
+fi
 echo ""
 
 # ── Verify Prerequisites ─────────────────────────────────────────────────────
@@ -191,8 +201,8 @@ az functionapp config appsettings set \
     "COSMOS_CONTAINER=$COSMOS_CONTAINER" \
     "COSMOS_CONNECTION__accountEndpoint=$COSMOS_ENDPOINT" \
     "AzureWebJobsStorage__accountName=$FUNCTION_STORAGE" \
-    "FOUNDRY_AGENT_ENDPOINT=${FOUNDRY_AGENT_ENDPOINT:-}" \
-    "VALIDATION_AGENT_APP_NAME=${VALIDATION_AGENT_APP_NAME:-personal-info-validator}" \
+    "FOUNDRY_AGENT_ENDPOINT=$FOUNDRY_AGENT_ENDPOINT" \
+    "VALIDATION_AGENT_APP_NAME=$VALIDATION_AGENT_APP_NAME" \
   --output none
 
 # Remove legacy settings from prior Consumption plan deployments
@@ -271,6 +281,23 @@ else
   echo "  (role already assigned)"
 fi
 
+# -- Azure AI User role for Function App MI (Foundry Agent access) --
+if [ -n "$FOUNDRY_RESOURCE_ID" ]; then
+  echo ""
+  echo "▸ Assigning Azure AI User role to Function App MI (Foundry Agent)..."
+  az role assignment create \
+    --assignee-object-id "$FUNCTION_PRINCIPAL_ID" \
+    --assignee-principal-type ServicePrincipal \
+    --role "Azure AI User" \
+    --scope "$FOUNDRY_RESOURCE_ID" \
+    --output none 2>/dev/null || echo "  (Azure AI User already assigned)"
+else
+  echo ""
+  echo "⚠  FOUNDRY_RESOURCE_ID not set — skipping Azure AI User role assignment."
+  echo "   The Function App will not be able to call the Foundry validation agent."
+  echo "   Set FOUNDRY_RESOURCE_ID to the Foundry project resource ID and re-run."
+fi
+
 # ── Deploy Function Code ─────────────────────────────────────────────────────
 echo ""
 echo "▸ Deploying function code..."
@@ -324,6 +351,18 @@ echo "    → Storage Account Contributor"
 echo "    → Storage Queue Data Contributor"
 echo "    → Storage File Data Privileged Contributor"
 echo "    → Storage Table Data Contributor"
+if [ -n "$FOUNDRY_RESOURCE_ID" ]; then
+  echo "    → Azure AI User on Foundry project (validation agent)"
+fi
+echo ""
+echo "Foundry Agent:"
+if [ -n "$FOUNDRY_AGENT_ENDPOINT" ]; then
+  echo "  Endpoint:              $FOUNDRY_AGENT_ENDPOINT"
+  echo "  Validation Agent App:  $VALIDATION_AGENT_APP_NAME"
+  echo "  Resource ID:           ${FOUNDRY_RESOURCE_ID:-(not set)}"
+else
+  echo "  ⚠ Not configured — set FOUNDRY_AGENT_ENDPOINT and FOUNDRY_RESOURCE_ID"
+fi
 echo ""
 echo "Security:"
 echo "  ✓ App Service Plan (B1) — no file share dependency, avoids shared key issues"
