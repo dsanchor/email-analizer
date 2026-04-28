@@ -33,7 +33,7 @@ text and fields from attached documents. The input may include:
 
 ## Validation Rules
 
-Apply these four validation rules to the input data:
+Apply these five validation rules to the input data:
 
 **Rule 1 — Required Documents**
 There must be at least two documents present:
@@ -45,28 +45,42 @@ Status: "pass" if both documents are found, "fail" otherwise.
 Detail: State which documents were found or which are missing.
 
 **Rule 2 — Name Consistency**
-The full name (nombre y apellidos) must match across both the IRPF and Vida \
-Laboral documents. Compare the name fields from both documents to confirm they \
-refer to the same person.
+The name (nombre y apellidos) must refer to the same person across both the IRPF \
+and Vida Laboral documents. Names and surnames may appear in different order \
+across documents (e.g., "García López, Juan" in one document vs "Juan García \
+López" in another). To validate:
+1. Extract individual name parts (first name, each surname) from each document.
+2. Compare the SET of name parts, ignoring order, punctuation, and separators.
+3. The rule passes if the same name parts appear in both documents regardless \
+of the order they are written.
 
-Status: "pass" if names match exactly, "fail" if they differ or cannot be found.
-Detail: State the name found and whether it matches, or explain what's missing.
+Status: "pass" if the same name parts are found in both documents, "fail" if \
+they differ or cannot be found.
+Detail: List the name parts found (e.g., "Name parts 'Juan', 'García', 'López' \
+found in both documents regardless of order") or explain what's missing.
 
-**Rule 3 — Bank Account & CSV from IRPF**
-From the "Impuesto sobre la Renta" document, verify:
-1. A valid bank account broken down into its component parts:
-   - **Iban**: Country code + check digits (e.g., ES37)
-   - **Bank**: 4-digit bank code (e.g., 2085)
-   - **Branch**: 4-digit branch code (e.g., 9405)
-   - **DC**: 2-digit control digits (e.g., 52)
-   - **Account**: Account number (e.g., 032345678)
-   All five components must be present and valid.
-2. A CSV (Código Seguro de Verificación) validation code is present
+**Rule 3 — Bank Account from IRPF**
+From the "Impuesto sobre la Renta" document, verify that a valid bank account \
+is present, broken down into its five component parts:
+- **Iban**: Country code + check digits (e.g., ES37)
+- **Bank**: 4-digit bank code (e.g., 2085)
+- **Branch**: 4-digit branch code (e.g., 9405)
+- **DC**: 2-digit control digits (e.g., 52)
+- **Account**: Account number (e.g., 032345678)
+All five components must be present and valid.
 
-Status: "pass" if all five bank account components and CSV are found, "fail" otherwise.
-Detail: State each bank account component and the CSV found, or explain what's missing.
+Status: "pass" if all five bank account components are found, "fail" otherwise.
+Detail: State each bank account component found, or explain what's missing.
 
-**Rule 4 — CEA Code Consistency in Vida Laboral**
+**Rule 4 — CSV Code from IRPF**
+From the "Impuesto sobre la Renta" document, verify that a valid CSV (Código \
+Seguro de Verificación) code is present. The CSV is a unique verification code \
+that authenticates the document.
+
+Status: "pass" if a valid CSV code is found, "fail" otherwise.
+Detail: State the CSV code found, or explain that it is missing.
+
+**Rule 5 — CEA Code Consistency in Vida Laboral**
 In the Vida Laboral document, if there are multiple pages, all pages must have \
 the same CEA (Código de Cuenta de Cotización) code. The CEA code is used for \
 validation purposes.
@@ -85,7 +99,8 @@ The output must have this exact structure:
   "statements": [
     {"rule": "Required Documents", "status": "pass|fail", "detail": "<explanation>"},
     {"rule": "Name Consistency", "status": "pass|fail", "detail": "<explanation>"},
-    {"rule": "Bank Account & CSV", "status": "pass|fail", "detail": "<explanation>"},
+    {"rule": "Bank Account", "status": "pass|fail", "detail": "<explanation>"},
+    {"rule": "CSV Code", "status": "pass|fail", "detail": "<explanation>"},
     {"rule": "CEA Code Consistency", "status": "pass|fail", "detail": "<explanation>"}
   ]
 }
@@ -96,13 +111,14 @@ The output must have this exact structure:
   "title": "Validation",
   "statements": [
     {"rule": "Required Documents", "status": "pass", "detail": "Both IRPF and Vida Laboral documents found."},
-    {"rule": "Name Consistency", "status": "pass", "detail": "Full name 'Juan García López' matches in both documents."},
-    {"rule": "Bank Account & CSV", "status": "pass", "detail": "IBAN prefix ES37, Bank 2085, Branch 9405, DC 52, Account 032345678 and CSV code ABC123 found in IRPF."},
+    {"rule": "Name Consistency", "status": "pass", "detail": "Name parts 'Juan', 'García', 'López' found in both documents regardless of order."},
+    {"rule": "Bank Account", "status": "pass", "detail": "IBAN prefix ES37, Bank 2085, Branch 9405, DC 52, Account 032345678 found in IRPF."},
+    {"rule": "CSV Code", "status": "pass", "detail": "CSV code ABC123 found in IRPF."},
     {"rule": "CEA Code Consistency", "status": "fail", "detail": "CEA code differs between page 1 (12345) and page 3 (67890)."}
   ]
 }
 
-Always include all four rules in your response, even if some cannot be evaluated \
+Always include all five rules in your response, even if some cannot be evaluated \
 due to missing data. In such cases, mark status as "fail" and explain what data \
 is missing in the detail field.
 """
