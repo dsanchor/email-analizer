@@ -191,6 +191,8 @@ az functionapp config appsettings set \
     "COSMOS_CONTAINER=$COSMOS_CONTAINER" \
     "COSMOS_CONNECTION__accountEndpoint=$COSMOS_ENDPOINT" \
     "AzureWebJobsStorage__accountName=$FUNCTION_STORAGE" \
+    "FOUNDRY_AGENT_ENDPOINT=${FOUNDRY_AGENT_ENDPOINT:-}" \
+    "VALIDATION_AGENT_APP_NAME=${VALIDATION_AGENT_APP_NAME:-personal-info-validator}" \
   --output none
 
 # Remove legacy settings from prior Consumption plan deployments

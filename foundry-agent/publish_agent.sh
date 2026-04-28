@@ -291,6 +291,11 @@ echo -e "  ${CYAN}  -H 'Authorization: Bearer <token>' \\\\${NC}"
 echo -e "  ${CYAN}  -H 'Content-Type: application/json' \\\\${NC}"
 echo -e "  ${CYAN}  -d '{\"input\": \"Say hello\"}'${NC}"
 echo
+info "To publish a different agent (e.g., validation agent):"
+echo -e "  ${CYAN}export APPLICATION_NAME=personal-info-validator${NC}"
+echo -e "  ${CYAN}export AGENT_NAME=PersonalInformationValidationAgent${NC}"
+echo -e "  ${CYAN}./publish_agent.sh${NC}"
+echo
 
 # ─── Cleanup ─────────────────────────────────────────────────────────────────
 rm -f "${PAYLOAD_FILE}"

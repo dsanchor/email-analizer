@@ -5,6 +5,8 @@ from datetime import datetime, timezone
 from azure.cosmos import CosmosClient
 from azure.identity import DefaultAzureCredential
 import os
+import urllib.request
+from urllib.error import HTTPError
 
 app = func.FunctionApp()
 
@@ -12,12 +14,122 @@ app = func.FunctionApp()
 COSMOS_ENDPOINT = os.environ.get("COSMOS_ENDPOINT")
 COSMOS_DATABASE = os.environ.get("COSMOS_DATABASE", "email-analyzer-db")
 COSMOS_CONTAINER = os.environ.get("COSMOS_CONTAINER", "emails")
+FOUNDRY_AGENT_ENDPOINT = os.environ.get("FOUNDRY_AGENT_ENDPOINT")
+VALIDATION_AGENT_APP_NAME = os.environ.get("VALIDATION_AGENT_APP_NAME", "personal-info-validator")
 
 # Initialize Cosmos client with managed identity
 credential = DefaultAzureCredential()
 cosmos_client = CosmosClient(COSMOS_ENDPOINT, credential=credential)
 database = cosmos_client.get_database_client(COSMOS_DATABASE)
 container = database.get_container_client(COSMOS_CONTAINER)
+
+
+def get_ai_foundry_token():
+    """Get an access token for Azure AI Foundry."""
+    token = credential.get_token("https://ai.azure.com/.default")
+    return token.token
+
+
+def call_validation_agent(document_data):
+    """
+    Call the PersonalInformationValidationAgent via the Responses API.
+    
+    Args:
+        document_data: String representation of document/attachment data to validate
+        
+    Returns:
+        dict: Parsed JSON response from the agent, or error structure
+    """
+    if not FOUNDRY_AGENT_ENDPOINT:
+        logging.error("FOUNDRY_AGENT_ENDPOINT not configured")
+        return {
+            "title": "Validation",
+            "error": "Agent endpoint not configured",
+            "statements": []
+        }
+    
+    try:
+        # Build the Responses API URL
+        url = (
+            f"{FOUNDRY_AGENT_ENDPOINT}/applications/{VALIDATION_AGENT_APP_NAME}"
+            f"/protocols/openai/responses?api-version=2025-11-15-preview"
+        )
+        
+        logging.info(f"Calling validation agent at {url}")
+        
+        # Get access token
+        token = get_ai_foundry_token()
+        
+        # Prepare request payload
+        payload = {"input": document_data}
+        data = json.dumps(payload).encode("utf-8")
+        
+        # Make HTTP request
+        req = urllib.request.Request(
+            url,
+            data=data,
+            headers={
+                "Authorization": f"Bearer {token}",
+                "Content-Type": "application/json",
+            },
+            method="POST",
+        )
+        
+        with urllib.request.urlopen(req, timeout=120) as resp:
+            response = json.loads(resp.read().decode("utf-8"))
+            
+        # Extract the agent's response text
+        agent_text = extract_agent_response(response)
+        
+        # Parse the JSON response from the agent
+        try:
+            agent_result = json.loads(agent_text)
+            logging.info(f"Agent returned validation result: {agent_result}")
+            return agent_result
+        except json.JSONDecodeError as e:
+            logging.error(f"Failed to parse agent response as JSON: {e}")
+            logging.error(f"Agent response text: {agent_text}")
+            return {
+                "title": "Validation",
+                "error": "Agent response was not valid JSON",
+                "raw_response": agent_text,
+                "statements": []
+            }
+            
+    except HTTPError as exc:
+        body = exc.read().decode("utf-8", errors="replace") if exc.fp else ""
+        logging.error(f"Validation agent HTTP error {exc.code}: {body}")
+        return {
+            "title": "Validation",
+            "error": f"HTTP {exc.code}: {body}",
+            "statements": []
+        }
+    except Exception as e:
+        logging.error(f"Error calling validation agent: {str(e)}", exc_info=True)
+        return {
+            "title": "Validation",
+            "error": str(e),
+            "statements": []
+        }
+
+
+def extract_agent_response(response):
+    """
+    Extract the agent's text from the Responses API output.
+    
+    The Responses API returns an 'output' array with items of type 'message'
+    containing 'content' arrays with text blocks.
+    """
+    for item in response.get("output", []):
+        if item.get("type") == "message" and item.get("role") == "assistant":
+            parts = item.get("content", [])
+            return "".join(
+                p.get("text", "") for p in parts if p.get("type") == "output_text"
+            )
+    # Fallback
+    if "output_text" in response:
+        return response["output_text"]
+    return json.dumps(response, indent=2)
 
 
 @app.cosmos_db_trigger(
@@ -70,24 +182,34 @@ def process_classified_emails(documents: func.DocumentList):
                 logging.info(f"Document {doc_id} already processed by agent, skipping")
                 continue
 
-            logging.info(f"Processing document {doc_id} - appending agent result")
+            logging.info(f"Processing document {doc_id} - calling validation agent")
 
+            # Prepare document data for validation
+            # Extract attachments and relevant content
+            attachments = doc_dict.get("attachments", [])
+            subject = doc_dict.get("subject", "")
+            body = doc_dict.get("body", "")
+            
+            # Build input for the agent
+            document_data = {
+                "subject": subject,
+                "body": body,
+                "attachments": attachments,
+                "messageId": message_id
+            }
+            
+            document_data_str = json.dumps(document_data, indent=2)
+            
+            # Call the validation agent
+            agent_result = call_validation_agent(document_data_str)
+            
             # Append new status to statusHistory
+            status = "Processed by agent" if "error" not in agent_result else "Agent processing failed"
             new_status = {
-                "status": "Processed by agent",
+                "status": status,
                 "timestamp": datetime.now(timezone.utc).isoformat()
             }
             status_history.append(new_status)
-
-            # Add agentResult field
-            agent_result = {
-                "title": "Validation",
-                "statements": [
-                    "DNIs match",
-                    "Birthday match",
-                    "Same name and surname"
-                ]
-            }
 
             # Update the document in Cosmos DB
             doc_dict["statusHistory"] = status_history
