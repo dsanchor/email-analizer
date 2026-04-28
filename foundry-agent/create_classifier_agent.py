@@ -43,6 +43,8 @@ add/remove users, or change account settings.
 - **compliance** — Regulatory, legal, audit, or data-privacy related inquiries.
 - **sales_inquiry** — Interest in purchasing new products or services, quote \
 requests, or upsell opportunities.
+- **mortgage_inquiry** — Customer interest in mortgages, including inquiries about \
+rates, terms, conditions, requirements, or mortgage product applications.
 - **feedback** — Positive feedback, suggestions, testimonials, or survey responses \
 that are not complaints.
 - **spam** — Unsolicited marketing, phishing attempts, or irrelevant messages.
@@ -82,6 +84,10 @@ Email body: "I keep getting error 403 when I try to access my dashboard."
 Email subject: "Invoice question"
 Email body: "I was charged twice on my last statement. Can you look into this?"
 → {"type": "billing_inquiry", "score": 94, "reasoning": "Question about a duplicate charge on an invoice."}
+
+Email subject: "Mortgage rates inquiry"
+Email body: "I'm interested in learning about your mortgage products. What are your current rates and what are the requirements to apply?"
+→ {"type": "mortgage_inquiry", "score": 96, "reasoning": "Customer is expressing interest in mortgage products and asking about rates and application requirements."}
 
 If the email is empty or completely unintelligible, respond:
 {"type": "unknown", "score": 100, "reasoning": "No matching with any possible type."}
