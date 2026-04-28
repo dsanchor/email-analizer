@@ -15,7 +15,7 @@ COSMOS_ENDPOINT = os.environ.get("COSMOS_ENDPOINT")
 COSMOS_DATABASE = os.environ.get("COSMOS_DATABASE", "email-analyzer-db")
 COSMOS_CONTAINER = os.environ.get("COSMOS_CONTAINER", "emails")
 FOUNDRY_AGENT_ENDPOINT = os.environ.get("FOUNDRY_AGENT_ENDPOINT")
-VALIDATION_AGENT_APP_NAME = os.environ.get("VALIDATION_AGENT_APP_NAME", "personal-info-validator")
+VALIDATION_AGENT_NAME = os.environ.get("VALIDATION_AGENT_NAME", "PersonalInformationValidationAgent")
 
 # Initialize Cosmos client with managed identity
 credential = DefaultAzureCredential()
@@ -49,19 +49,22 @@ def call_validation_agent(document_data):
         }
     
     try:
-        # Build the Responses API URL
-        url = (
-            f"{FOUNDRY_AGENT_ENDPOINT}/applications/{VALIDATION_AGENT_APP_NAME}"
-            f"/protocols/openai/responses?api-version=2025-11-15-preview"
-        )
+        # Build the Responses API URL — project-level endpoint, same as Logic App
+        url = f"{FOUNDRY_AGENT_ENDPOINT}/openai/responses?api-version=2025-11-15-preview"
         
         logging.info(f"Calling validation agent at {url}")
         
         # Get access token
         token = get_ai_foundry_token()
         
-        # Prepare request payload
-        payload = {"input": document_data}
+        # Prepare request payload with agent reference (same pattern as Logic App)
+        payload = {
+            "input": document_data,
+            "agent": {
+                "name": VALIDATION_AGENT_NAME,
+                "type": "agent_reference"
+            }
+        }
         data = json.dumps(payload).encode("utf-8")
         
         # Make HTTP request

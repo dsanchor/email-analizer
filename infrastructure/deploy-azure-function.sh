@@ -30,7 +30,7 @@ APP_SERVICE_PLAN="${APP_SERVICE_PLAN:-email-analyzer-func-plan}"
 # Foundry Agent — required for validation agent calls
 FOUNDRY_AGENT_ENDPOINT="${FOUNDRY_AGENT_ENDPOINT:-}"
 FOUNDRY_RESOURCE_ID="${FOUNDRY_RESOURCE_ID:-}"
-VALIDATION_AGENT_APP_NAME="${VALIDATION_AGENT_APP_NAME:-personal-info-validator}"
+VALIDATION_AGENT_NAME="${VALIDATION_AGENT_NAME:-PersonalInformationValidationAgent}"
 
 echo "╔══════════════════════════════════════════════════════════════╗"
 echo "║  Email Analyzer — Azure Function Deployment                  ║"
@@ -49,7 +49,7 @@ echo "  Lease Container:       $LEASE_CONTAINER"
 if [ -n "$FOUNDRY_AGENT_ENDPOINT" ]; then
   echo "  Foundry Endpoint:      $FOUNDRY_AGENT_ENDPOINT"
   echo "  Foundry Resource ID:   ${FOUNDRY_RESOURCE_ID:-(not set — AI User role won't be assigned)}"
-  echo "  Validation Agent App:  $VALIDATION_AGENT_APP_NAME"
+  echo "  Validation Agent App:  $VALIDATION_AGENT_NAME"
 fi
 echo ""
 
@@ -202,7 +202,7 @@ az functionapp config appsettings set \
     "COSMOS_CONNECTION__accountEndpoint=$COSMOS_ENDPOINT" \
     "AzureWebJobsStorage__accountName=$FUNCTION_STORAGE" \
     "FOUNDRY_AGENT_ENDPOINT=$FOUNDRY_AGENT_ENDPOINT" \
-    "VALIDATION_AGENT_APP_NAME=$VALIDATION_AGENT_APP_NAME" \
+    "VALIDATION_AGENT_NAME=$VALIDATION_AGENT_NAME" \
   --output none
 
 # Remove legacy settings from prior Consumption plan deployments
@@ -358,7 +358,7 @@ echo ""
 echo "Foundry Agent:"
 if [ -n "$FOUNDRY_AGENT_ENDPOINT" ]; then
   echo "  Endpoint:              $FOUNDRY_AGENT_ENDPOINT"
-  echo "  Validation Agent App:  $VALIDATION_AGENT_APP_NAME"
+  echo "  Validation Agent App:  $VALIDATION_AGENT_NAME"
   echo "  Resource ID:           ${FOUNDRY_RESOURCE_ID:-(not set)}"
 else
   echo "  ⚠ Not configured — set FOUNDRY_AGENT_ENDPOINT and FOUNDRY_RESOURCE_ID"
