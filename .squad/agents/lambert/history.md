@@ -242,3 +242,15 @@
 - **EmailDetail changes:** Horizontal status flow timeline after back link, before header; shows all steps with circles, labels, timestamps; completed steps get checkmark + blue fill, active/latest step gets blue glow ring; stacks vertically on mobile
 - **CSS patterns:** `.status-badge` (table pill, 3 variants), `.status-timeline` (horizontal flow with step-groups, circles, connectors, labels, timestamps); uses existing CSS vars; responsive at 640px breakpoint
 - **Design:** Apple-inspired — 14px circles, 2px connectors, --color-blue accent, 980px pill radius on badges, subtle shadows per DESIGN.md
+
+---
+
+### Draggable Column Resizing — 2025-07-27
+
+- **Scope:** Reverted column width changes from commit af98f15 and added drag-to-resize column handles
+- **Part 1 — CSS Revert:** Restored original desktop widths (date: 180px, from: 220px, subject: auto) and tablet widths (date: 140px, from: 160px, type: 120px, score: 70px). Removed spurious `subject: 300px` added in the tablet breakpoint.
+- **Part 2 — Resize Handles:** Added a `.resize-handle` span on the right edge of each `<th>`. Users click-drag to resize columns. Widths stored in React state (`colWidths`) and applied as inline styles, overriding CSS defaults. Minimum column width: 50px.
+- **CSS additions:** `.resize-handle` (6px hit area, `cursor: col-resize`), `::after` pseudo-element for visual indicator (2px blue line on hover/active), `position: relative` on `.email-table__th`
+- **React additions:** `useRef` for tracking active resize, `handleResizeStart` with document-level mousemove/mouseup listeners, `colWidths` state object
+- **Design:** Minimal and Apple-inspired — handle is invisible by default, turns Apple Blue on hover/drag
+- **Build verified:** `npm run build` passes (47 modules, 280KB bundle)

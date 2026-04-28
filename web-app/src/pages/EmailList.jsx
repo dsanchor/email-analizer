@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useMemo } from "react";
+import { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 
 // ---------------------------------------------------------------------------
@@ -59,6 +59,10 @@ export default function EmailList() {
   const [sortCol, setSortCol] = useState("date");
   const [sortAsc, setSortAsc] = useState(false);
   const [searchInput, setSearchInput] = useState(q);
+
+  // Column resize state
+  const [colWidths, setColWidths] = useState({});
+  const resizeRef = useRef(null);
 
   // Fetch emails
   useEffect(() => {
@@ -149,6 +153,40 @@ export default function EmailList() {
     setSearchParams({});
   };
 
+  // Column resize via drag
+  const handleResizeStart = useCallback((e, colKey) => {
+    e.preventDefault();
+    e.stopPropagation();
+    const th = e.target.closest("th");
+    if (!th) return;
+    const startX = e.clientX;
+    const startWidth = th.offsetWidth;
+    const handle = e.target;
+    handle.classList.add("resize-handle--active");
+
+    resizeRef.current = { colKey, startX, startWidth, handle };
+
+    const onMouseMove = (moveEvent) => {
+      const ref = resizeRef.current;
+      if (!ref) return;
+      const delta = moveEvent.clientX - ref.startX;
+      const newWidth = Math.max(50, ref.startWidth + delta);
+      setColWidths((prev) => ({ ...prev, [ref.colKey]: newWidth }));
+    };
+
+    const onMouseUp = () => {
+      if (resizeRef.current?.handle) {
+        resizeRef.current.handle.classList.remove("resize-handle--active");
+      }
+      resizeRef.current = null;
+      document.removeEventListener("mousemove", onMouseMove);
+      document.removeEventListener("mouseup", onMouseUp);
+    };
+
+    document.addEventListener("mousemove", onMouseMove);
+    document.addEventListener("mouseup", onMouseUp);
+  }, []);
+
   function SortArrow({ col }) {
     const active = sortCol === col;
     return (
@@ -237,38 +275,50 @@ export default function EmailList() {
                   <th
                     className="email-table__th email-table__th--date sortable"
                     onClick={() => handleSort("date")}
+                    style={colWidths.date ? { width: colWidths.date } : undefined}
                   >
                     Date <SortArrow col="date" />
+                    <span className="resize-handle" onMouseDown={(e) => handleResizeStart(e, "date")} />
                   </th>
                   <th
                     className="email-table__th email-table__th--from sortable"
                     onClick={() => handleSort("from")}
+                    style={colWidths.from ? { width: colWidths.from } : undefined}
                   >
                     From <SortArrow col="from" />
+                    <span className="resize-handle" onMouseDown={(e) => handleResizeStart(e, "from")} />
                   </th>
                   <th
                     className="email-table__th email-table__th--subject sortable"
                     onClick={() => handleSort("subject")}
+                    style={colWidths.subject ? { width: colWidths.subject } : undefined}
                   >
                     Subject <SortArrow col="subject" />
+                    <span className="resize-handle" onMouseDown={(e) => handleResizeStart(e, "subject")} />
                   </th>
                   <th
                     className="email-table__th email-table__th--type sortable"
                     onClick={() => handleSort("type")}
+                    style={colWidths.type ? { width: colWidths.type } : undefined}
                   >
                     Type <SortArrow col="type" />
+                    <span className="resize-handle" onMouseDown={(e) => handleResizeStart(e, "type")} />
                   </th>
                   <th
                     className="email-table__th email-table__th--score sortable"
                     onClick={() => handleSort("score")}
+                    style={colWidths.score ? { width: colWidths.score } : undefined}
                   >
                     Score <SortArrow col="score" />
+                    <span className="resize-handle" onMouseDown={(e) => handleResizeStart(e, "score")} />
                   </th>
                   <th
                     className="email-table__th email-table__th--status sortable"
                     onClick={() => handleSort("status")}
+                    style={colWidths.status ? { width: colWidths.status } : undefined}
                   >
                     Status <SortArrow col="status" />
+                    <span className="resize-handle" onMouseDown={(e) => handleResizeStart(e, "status")} />
                   </th>
                   <th className="email-table__th email-table__th--actions"></th>
                 </tr>

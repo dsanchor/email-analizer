@@ -216,9 +216,9 @@ a:hover { text-decoration: underline; }
   white-space: nowrap;
 }
 
-.email-table__th--date { width: 120px; }
-.email-table__th--from { width: 140px; }
-.email-table__th--subject { width: 500px; }
+.email-table__th--date { width: 180px; }
+.email-table__th--from { width: 220px; }
+.email-table__th--subject { width: auto; }
 
 .sortable {
   cursor: pointer;
@@ -596,6 +596,39 @@ a:hover { text-decoration: underline; }
 .email-table__th--type { width: 140px; }
 .email-table__th--score { width: 80px; }
 
+/* ---- Column Resize Handle ---- */
+.email-table__th {
+  position: relative;
+}
+
+.resize-handle {
+  position: absolute;
+  right: 0;
+  top: 0;
+  bottom: 0;
+  width: 6px;
+  cursor: col-resize;
+  user-select: none;
+  z-index: 1;
+}
+
+.resize-handle::after {
+  content: "";
+  position: absolute;
+  right: 2px;
+  top: 25%;
+  bottom: 25%;
+  width: 2px;
+  border-radius: 1px;
+  background: transparent;
+  transition: background var(--transition-fast);
+}
+
+.resize-handle:hover::after,
+.resize-handle--active::after {
+  background: var(--color-blue);
+}
+
 .email-table__td--type {
   overflow: visible;
 }
@@ -782,11 +815,10 @@ a:hover { text-decoration: underline; }
   .inbox__header { flex-direction: column; align-items: flex-start; }
   .inbox__search-input { width: 100%; }
   .inbox__search { width: 100%; }
-  .email-table__th--date { width: 110px; }
-  .email-table__th--from { width: 130px; }
-  .email-table__th--subject { width: 300px; }
-  .email-table__th--type { width: 100px; }
-  .email-table__th--score { width: 60px; }
+  .email-table__th--date { width: 140px; }
+  .email-table__th--from { width: 160px; }
+  .email-table__th--type { width: 120px; }
+  .email-table__th--score { width: 70px; }
 }
 
 @media (max-width: 640px) {
