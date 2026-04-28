@@ -15,3 +15,8 @@
 - **Security:** Zero connection strings, all managed identity, Cosmos data-plane RBAC
 - **Project structure:** All placeholder files exist — logic-app/, web-app/, tests/ are populated
 - **Deploy script already included API connections** (office365, azureblob, cosmosdb) with access policies — pre-existing work by team
+- **Validation Agent Integration:** Azure Function now calls PersonalInformationValidationAgent via Foundry Responses API instead of using mock data. The agent validates documents against 4 business rules: Required Documents, Name Consistency, Bank Account & CSV, CEA Code Consistency.
+- **Agent Result Format:** Statements are objects `{"rule": "...", "status": "pass|fail", "detail": "..."}` instead of plain strings. Stored in `agentResult` field on Cosmos documents.
+- **Foundry Token Audience:** `https://ai.azure.com/.default` for Responses API calls from Azure services
+- **Azure Function Auth:** Uses `DefaultAzureCredential` for both Cosmos DB and Foundry access; requires `Azure AI User` role on Foundry project
+- **Documentation Pattern:** All docs updated to reflect real agent integration — azure-function/README.md, root README.md (sections 1-4), docs/architecture.md (component flow, schema, roles, project structure)
