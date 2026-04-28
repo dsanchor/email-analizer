@@ -256,9 +256,24 @@ export default function EmailDetail() {
             <h2 className="detail__agent-result-title">{email.agentResult.title}</h2>
             <div className="detail__agent-result-body">
               <ul className="agent-result-list">
-                {email.agentResult.statements.map((statement, idx) => (
-                  <li key={idx} className="agent-result-list__item">{statement}</li>
-                ))}
+                {email.agentResult.statements.map((statement, idx) => {
+                  if (typeof statement === "string") {
+                    return <li key={idx} className="agent-result-list__item">{statement}</li>;
+                  }
+                  const isPassing = statement.status === "pass";
+                  return (
+                    <li
+                      key={idx}
+                      className={`agent-result-list__item agent-result-list__item--${isPassing ? "pass" : "fail"}`}
+                    >
+                      <span className="agent-result-rule">{statement.rule}</span>
+                      <span className={`agent-result-status agent-result-status--${isPassing ? "pass" : "fail"}`}>
+                        {isPassing ? "Pass" : "Fail"}
+                      </span>
+                      <span className="agent-result-detail">{statement.detail}</span>
+                    </li>
+                  );
+                })}
               </ul>
             </div>
           </div>

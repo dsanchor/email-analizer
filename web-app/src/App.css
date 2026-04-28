@@ -652,6 +652,51 @@ a:hover { text-decoration: underline; }
   font-weight: 600;
 }
 
+.agent-result-list__item--pass::before {
+  content: "✓";
+  color: #2ea043;
+}
+
+.agent-result-list__item--fail::before {
+  content: "✗";
+  color: #cf222e;
+}
+
+.agent-result-rule {
+  font-weight: 600;
+  margin-right: 8px;
+}
+
+.agent-result-status {
+  display: inline-block;
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  padding: 1px 7px;
+  border-radius: 10px;
+  margin-right: 8px;
+  vertical-align: middle;
+}
+
+.agent-result-status--pass {
+  background: #dafbe1;
+  color: #1a7f37;
+}
+
+.agent-result-status--fail {
+  background: #ffebe9;
+  color: #cf222e;
+}
+
+.agent-result-detail {
+  display: block;
+  margin-top: 2px;
+  font-size: 14px;
+  color: var(--color-text-secondary, #656d76);
+  line-height: 1.45;
+}
+
 /* ---- Classification (detail section) ---- */
 .detail__classification {
   margin-bottom: 32px;
