@@ -11,19 +11,40 @@ This Azure Function is triggered by Cosmos DB change feed events on the `emails`
    - For each document, check the last entry in `statusHistory` array
    - If the last status is NOT `"Email classified"` → skip
    - If the last status IS `"Email classified"` → process:
-     - Append new status entry: `{"status": "Processed by agent", "timestamp": "<current UTC ISO>"}`
-     - Add `agentResult` field with mock validation data
+     - Call the **PersonalInformationValidationAgent** in Azure AI Foundry via the Responses API
+     - The agent validates the email against 4 business rules: Required Documents, Name Consistency, Bank Account & CSV, CEA Code Consistency
+     - Append new status entry: `{"status": "Processed by agent", "timestamp": "<current UTC ISO>"}` (or `"Agent processing failed"` on error)
+     - Add `agentResult` field with structured validation results
      - Write updated document back to Cosmos DB
 
-## Mock Agent Result
+## Agent Result Format
+
+The validation agent returns structured data with individual rule status objects:
 
 ```json
 {
   "title": "Validation",
   "statements": [
-    "DNIs match",
-    "Birthday match",
-    "Same name and surname"
+    {
+      "rule": "Required Documents",
+      "status": "pass",
+      "detail": "All required documents are present"
+    },
+    {
+      "rule": "Name Consistency",
+      "status": "pass",
+      "detail": "Customer name matches across all documents"
+    },
+    {
+      "rule": "Bank Account & CSV",
+      "status": "fail",
+      "detail": "Bank account format invalid in CSV file"
+    },
+    {
+      "rule": "CEA Code Consistency",
+      "status": "pass",
+      "detail": "CEA code consistent throughout submission"
+    }
   ]
 }
 ```
@@ -36,10 +57,16 @@ This Azure Function is triggered by Cosmos DB change feed events on the `emails`
 | `COSMOS_DATABASE` | Cosmos DB database name | `email-analyzer-db` |
 | `COSMOS_CONTAINER` | Cosmos DB container name | `emails` |
 | `COSMOS_CONNECTION__accountEndpoint` | Cosmos DB trigger binding connection (MI auth) | (required) |
+| `FOUNDRY_AGENT_ENDPOINT` | Azure AI Foundry project endpoint (full project URL) | (required) |
+| `VALIDATION_AGENT_NAME` | Name of the validation agent in Foundry | `PersonalInformationValidationAgent` |
 
 ## Authentication
 
-Uses **managed identity** (DefaultAzureCredential) for all Cosmos DB operations. No connection strings or keys.
+Uses **managed identity** (DefaultAzureCredential) for all Azure service access:
+- **Cosmos DB:** DefaultAzureCredential (system-assigned MI on Function App)
+- **Foundry AI project:** DefaultAzureCredential with token audience `https://ai.azure.com/.default`
+
+The Function App requires `Azure AI User` role on the Azure AI Foundry project to invoke the validation agent.
 
 ## Deployment
 
@@ -54,9 +81,10 @@ The script will:
 1. Create Azure Function App (Linux, Python 3.11, Consumption plan)
 2. Enable system-assigned managed identity
 3. Assign Cosmos DB Built-in Data Contributor role to the Function App MI
-4. Configure app settings (Cosmos endpoint, database, container)
-5. Create lease container in Cosmos DB
-6. Deploy the function code
+4. Assign Azure AI User role on the Foundry AI project (if `FOUNDRY_RESOURCE_ID` provided)
+5. Configure app settings (Cosmos endpoint, database, container, Foundry endpoint, agent name)
+6. Create lease container in Cosmos DB
+7. Deploy the function code
 
 ## Manual Deployment
 
@@ -84,7 +112,9 @@ For local testing, create `local.settings.json` (not committed to repo):
     "COSMOS_ENDPOINT": "https://<your-cosmos-account>.documents.azure.com:443/",
     "COSMOS_DATABASE": "email-analyzer-db",
     "COSMOS_CONTAINER": "emails",
-    "COSMOS_CONNECTION__accountEndpoint": "https://<your-cosmos-account>.documents.azure.com:443/"
+    "COSMOS_CONNECTION__accountEndpoint": "https://<your-cosmos-account>.documents.azure.com:443/",
+    "FOUNDRY_AGENT_ENDPOINT": "https://<your-foundry>.services.ai.azure.com/api/projects/<project-id>",
+    "VALIDATION_AGENT_NAME": "PersonalInformationValidationAgent"
   }
 }
 ```

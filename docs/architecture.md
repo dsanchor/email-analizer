@@ -65,12 +65,13 @@
 5. Logic App upserts email document with attachments + classification to Cosmos DB
 6. [OPTIONAL] Azure Function is triggered by Cosmos DB change feed:
    a. Detects document with statusHistory ending in "Email classified"
-   b. Appends "Processed by agent" status entry
-   c. Adds mock agentResult with validation statements
-   d. Updates document in Cosmos DB
+   b. Calls PersonalInformationValidationAgent via Foundry Responses API
+   c. Appends "Processed by agent" status entry (or "Agent processing failed" on error)
+   d. Adds agentResult with structured validation statements (rule, status, detail)
+   e. Updates document in Cosmos DB
 7. Web App queries Cosmos DB for email list / detail
 8. Web App streams attachments from Blob Storage via managed identity
-9. Web App renders classification (type badge, score, reasoning), CU results, and agent processing status
+9. Web App renders classification (type badge, score, reasoning), CU results, and agent validation status
 ```
 
 ---
@@ -141,6 +142,45 @@
     "score": 90,
     "reasoning": "The email discusses policy terms and renewal options..."
   },
+  "agentResult": {
+    "title": "Validation",
+    "statements": [
+      {
+        "rule": "Required Documents",
+        "status": "pass",
+        "detail": "All required documents are present"
+      },
+      {
+        "rule": "Name Consistency",
+        "status": "pass",
+        "detail": "Customer name matches across all documents"
+      },
+      {
+        "rule": "Bank Account & CSV",
+        "status": "fail",
+        "detail": "Bank account format invalid in CSV file"
+      },
+      {
+        "rule": "CEA Code Consistency",
+        "status": "pass",
+        "detail": "CEA code consistent throughout submission"
+      }
+    ]
+  },
+  "statusHistory": [
+    {
+      "status": "Email received",
+      "timestamp": "2024-12-15T14:30:00Z"
+    },
+    {
+      "status": "Email classified",
+      "timestamp": "2024-12-15T14:30:03Z"
+    },
+    {
+      "status": "Processed by agent",
+      "timestamp": "2024-12-15T14:30:05Z"
+    }
+  ],
   "processedAt": "2024-12-15T14:30:05Z",
   "_ts": 1702650605
 }
@@ -156,6 +196,8 @@
 | `contentUnderstanding` per attachment | CU results stored alongside attachment metadata; no separate lookup needed |
 | `classification` at document level | Email classification applies to the whole email, not individual attachments |
 | `bodyPreview` separate from `body` | Enables fast list views without loading full HTML bodies |
+| `statusHistory` array | Tracks email processing pipeline state with timestamps for audit trail |
+| `agentResult` with structured statements | Validation results include rule name, pass/fail status, and detail message |
 | `processedAt` timestamp | Tracks when Logic App processed the email vs. when it was received |
 
 ---
@@ -302,6 +344,7 @@ All service-to-service communication uses Azure Managed Identities. **Zero conne
 | Target Resource | Role | Purpose |
 |----------------|------|---------|
 | Cosmos DB Account | **Cosmos DB Built-in Data Contributor** | Read change feed and update email documents with processing status |
+| Azure AI Foundry project | **Azure AI User** | Invoke PersonalInformationValidationAgent via Responses API |
 
 ### Role Assignment Reference
 
@@ -433,7 +476,10 @@ email-analyzer/
 │   └── architecture.md          # This document
 ├── foundry-agent/
 │   ├── create_classifier_agent.py  # Provisions the Foundry classification agent
-│   └── requirements.txt            # Python dependencies
+│   ├── create_validation_agent.py  # Provisions the Foundry validation agent (optional)
+│   ├── invoke_agent.py          # Tests agents via the Responses API
+│   ├── publish_agent.sh         # Publishes agents as Agent Applications (optional)
+│   └── requirements.txt         # Python dependencies
 ├── azure-function/              # Optional: Cosmos DB change feed processor
 │   ├── README.md                # Function-specific documentation
 │   ├── function_app.py          # Python Azure Function entry point

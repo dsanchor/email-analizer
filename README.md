@@ -79,6 +79,23 @@ After creation, set these variables when deploying the Logic App:
 
 > **Tip:** You can test the agent with the invoke script: `python foundry-agent/invoke_agent.py --project-agent`
 
+### 2. Azure AI Foundry — Validation Agent (Optional, for Azure Function)
+
+If you plan to use the optional Azure Function for change feed processing, create a **PersonalInformationValidationAgent** that validates documents against 4 business rules:
+
+```bash
+cd foundry-agent
+python create_validation_agent.py
+```
+
+Set these variables before deploying the Azure Function:
+
+| Variable | Description |
+|----------|-------------|
+| `FOUNDRY_AGENT_ENDPOINT` | Same as above (classifier agent endpoint) |
+| `FOUNDRY_RESOURCE_ID` | Same as above — needed to assign roles to the Function App MI |
+| `VALIDATION_AGENT_NAME` | The validation agent name (default: `PersonalInformationValidationAgent`) |
+
 ### 2. Azure AI Content Understanding — PDF Analysis (Optional)
 
 The Logic App can call Azure Content Understanding to extract structured fields from PDF attachments. This is optional — emails are still processed without it.
@@ -99,21 +116,53 @@ The deploy script grants the Logic App's managed identity `Cognitive Services Us
 
 > **Docs:** [Azure AI Content Understanding](https://learn.microsoft.com/en-us/azure/ai-services/content-understanding/overview)
 
-### 3. Azure Function — Cosmos DB Change Feed Processor (Optional)
+### 3. Azure AI Content Understanding — PDF Analysis (Optional)
 
-An optional Python Azure Function processes emails after they've been classified. It watches the Cosmos DB change feed for documents where the latest status is `"Email classified"`, then appends a `"Processed by agent"` status and adds mock agent validation results.
+The Logic App can call Azure Content Understanding to extract structured fields from PDF attachments. This is optional — emails are still processed without it.
+
+**Setup steps:**
+
+1. Deploy an **Azure AI Services / Content Understanding** resource in the [Azure Portal](https://portal.azure.com)
+2. Create and train an analyzer for your document types (e.g. invoices, claims)
+3. Set the following environment variables before deploying:
+
+| Variable | Description |
+|----------|-------------|
+| `CONTENT_UNDERSTANDING_ENDPOINT` | Content Understanding endpoint (e.g. `https://<name>.cognitiveservices.azure.com`) |
+| `CONTENT_UNDERSTANDING_ANALYZER_ID` | Your analyzer/classifier ID |
+| `CONTENT_UNDERSTANDING_RESOURCE_ID` | Full ARM resource ID (`/subscriptions/<sub>/resourceGroups/<rg>/providers/Microsoft.CognitiveServices/accounts/<name>`) |
+
+The deploy script grants the Logic App's managed identity `Cognitive Services User` role on the Content Understanding resource.
+
+> **Docs:** [Azure AI Content Understanding](https://learn.microsoft.com/en-us/azure/ai-services/content-understanding/overview)
+
+### 4. Azure Function — Cosmos DB Change Feed Processor (Optional)
+
+An optional Python Azure Function processes emails after they've been classified. It watches the Cosmos DB change feed for documents where the latest status is `"Email classified"`, then calls the **PersonalInformationValidationAgent** in Azure AI Foundry to validate the email against 4 business rules (Required Documents, Name Consistency, Bank Account & CSV, CEA Code Consistency).
 
 **What it does:**
 
 - Triggered by Cosmos DB change feed on the `emails` container
 - Monitors the `statusHistory` array for the latest status
-- When a document is classified: appends a new status, adds mock `agentResult` field with validation statements
-- Uses managed identity (zero connection strings) for Cosmos DB access
+- When a document is classified: calls the Foundry validation agent, appends a new status, adds `agentResult` field with validation statements
+- Uses managed identity (zero connection strings) for Cosmos DB and Foundry access
+
+**Environment variables (set automatically by deploy script):**
+
+| Variable | Description |
+|----------|-------------|
+| `COSMOS_ENDPOINT` | Cosmos DB account endpoint URL |
+| `COSMOS_DATABASE` | Cosmos DB database name (default: `email-analyzer-db`) |
+| `COSMOS_CONTAINER` | Cosmos DB container name (default: `emails`) |
+| `COSMOS_CONNECTION__accountEndpoint` | Cosmos DB trigger binding connection (managed identity auth) |
+| `FOUNDRY_AGENT_ENDPOINT` | Azure AI Foundry project endpoint (e.g., `https://<account>.services.ai.azure.com/api/projects/<project>`) |
+| `VALIDATION_AGENT_NAME` | Validation agent name (default: `PersonalInformationValidationAgent`) |
 
 **Prerequisites:**
 
 - **Azure Functions Core Tools** — [Install](https://learn.microsoft.com/en-us/azure/azure-functions/functions-run-local)
 - **Python 3.11+** — Already required for foundry-agent provisioning
+- **Azure AI Foundry project** with the validation agent deployed
 
 **Deploy the function:**
 
@@ -126,15 +175,7 @@ The script creates:
 - Dedicated storage account for Function internals
 - Leases container in Cosmos DB (for change feed tracking)
 - Assigns `Cosmos DB Built-in Data Contributor` role to the Function App's managed identity
-
-**Environment variables (set automatically by deploy script):**
-
-| Variable | Description |
-|----------|-------------|
-| `COSMOS_ENDPOINT` | Cosmos DB account endpoint URL |
-| `COSMOS_DATABASE` | Cosmos DB database name (default: `email-analyzer-db`) |
-| `COSMOS_CONTAINER` | Cosmos DB container name (default: `emails`) |
-| `COSMOS_CONNECTION__accountEndpoint` | Cosmos DB trigger binding connection (managed identity auth) |
+- Assigns `Azure AI User` role on the Foundry AI project (for agent invocation)
 
 **Monitoring:**
 
@@ -217,8 +258,9 @@ email-analyzer/
 │   └── architecture.md          # Full architecture documentation
 ├── foundry-agent/
 │   ├── create_classifier_agent.py  # Provisions the Foundry classification agent
-│   ├── invoke_agent.py          # Tests the agent via the Responses API
-│   ├── publish_agent.sh         # Publishes agent as Agent Application (optional)
+│   ├── create_validation_agent.py  # Provisions the Foundry validation agent (optional)
+│   ├── invoke_agent.py          # Tests agents via the Responses API
+│   ├── publish_agent.sh         # Publishes agents as Agent Applications (optional)
 │   └── requirements.txt         # Python dependencies
 ├── azure-function/              # Optional: Cosmos DB change feed processor
 │   ├── README.md                # Function-specific documentation
@@ -332,6 +374,7 @@ This solution uses **zero connection strings**. All service-to-service authentic
 | Container App | Blob Storage | Storage Blob Data Reader |
 | Container App | Cosmos DB | Cosmos DB Built-in Data Contributor |
 | Azure Function (optional) | Cosmos DB | Cosmos DB Built-in Data Contributor |
+| Azure Function (optional) | Foundry AI project | Azure AI User |
 
 The only interactive authentication is the **Office 365 OAuth consent** — a one-time step in the Azure Portal under **API Connections → office365 → Edit API connection → Authorize**.
 
