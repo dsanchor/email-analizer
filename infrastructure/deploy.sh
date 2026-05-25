@@ -25,6 +25,11 @@ CONTENT_UNDERSTANDING_ENDPOINT="${CONTENT_UNDERSTANDING_ENDPOINT:-}"
 CONTENT_UNDERSTANDING_ANALYZER_ID="${CONTENT_UNDERSTANDING_ANALYZER_ID:-}"
 CONTENT_UNDERSTANDING_RESOURCE_ID="${CONTENT_UNDERSTANDING_RESOURCE_ID:-}"
 
+# Document Intelligence (optional — set if integrating DNI/ID document extraction)
+# Endpoint example: https://docintelligenceplayground.cognitiveservices.azure.com
+DOC_INTELLIGENCE_ENDPOINT="${DOC_INTELLIGENCE_ENDPOINT:-}"
+DOC_INTELLIGENCE_RESOURCE_ID="${DOC_INTELLIGENCE_RESOURCE_ID:-}"
+
 # Foundry Agent (project-level) (optional — set if integrating email classification)
 FOUNDRY_AGENT_ENDPOINT="${FOUNDRY_AGENT_ENDPOINT:-}"
 FOUNDRY_RESOURCE_ID="${FOUNDRY_RESOURCE_ID:-}"
@@ -43,6 +48,10 @@ echo "  Container App:   $CONTAINER_APP"
 if [ -n "$CONTENT_UNDERSTANDING_ENDPOINT" ]; then
   echo "  Content Understanding: $CONTENT_UNDERSTANDING_ENDPOINT"
   echo "  CU Analyzer ID:  $CONTENT_UNDERSTANDING_ANALYZER_ID"
+fi
+if [ -n "$DOC_INTELLIGENCE_ENDPOINT" ]; then
+  echo "  Doc Intelligence:    $DOC_INTELLIGENCE_ENDPOINT (prebuilt-idDocument)"
+  echo "  DI Resource ID:      ${DOC_INTELLIGENCE_RESOURCE_ID:-(not set — MI role wont be assigned)}"
 fi
 if [ -n "$FOUNDRY_AGENT_ENDPOINT" ]; then
   echo "  Foundry Agent (project-level): $FOUNDRY_AGENT_ENDPOINT"
@@ -202,6 +211,13 @@ WORKFLOW_DEFINITION=$(echo "$WORKFLOW_DEFINITION" | sed "s/__STORAGE_ACCOUNT__/$
 # Replace Content Understanding placeholders (if configured)
 if [ -n "$CONTENT_UNDERSTANDING_ENDPOINT" ]; then
   WORKFLOW_DEFINITION=$(echo "$WORKFLOW_DEFINITION" | sed "s|__CONTENT_UNDERSTANDING_ENDPOINT__|$CONTENT_UNDERSTANDING_ENDPOINT|g; s/__CONTENT_UNDERSTANDING_ANALYZER_ID__/$CONTENT_UNDERSTANDING_ANALYZER_ID/g")
+fi
+
+# Replace Document Intelligence placeholders (if configured)
+if [ -n "$DOC_INTELLIGENCE_ENDPOINT" ]; then
+  # Strip trailing slash if any
+  DI_ENDPOINT_CLEAN="${DOC_INTELLIGENCE_ENDPOINT%/}"
+  WORKFLOW_DEFINITION=$(echo "$WORKFLOW_DEFINITION" | sed "s|__DOC_INTELLIGENCE_ENDPOINT__|$DI_ENDPOINT_CLEAN|g")
 fi
 
 # Replace Foundry Agent (project-level) placeholders (if configured)
@@ -396,6 +412,17 @@ if [ -n "$CONTENT_UNDERSTANDING_RESOURCE_ID" ]; then
     --output none 2>/dev/null || echo "    (already assigned)"
 fi
 
+# Logic App MI → Cognitive Services User (if Document Intelligence is configured)
+if [ -n "$DOC_INTELLIGENCE_RESOURCE_ID" ]; then
+  echo "  ▸ Logic App → Cognitive Services User (Document Intelligence)..."
+  az role assignment create \
+    --assignee-object-id "$LOGIC_APP_PRINCIPAL_ID" \
+    --assignee-principal-type ServicePrincipal \
+    --role "Cognitive Services User" \
+    --scope "$DOC_INTELLIGENCE_RESOURCE_ID" \
+    --output none 2>/dev/null || echo "    (already assigned)"
+fi
+
 # Logic App MI → Azure AI User on Foundry project (if configured)
 if [ -n "$FOUNDRY_RESOURCE_ID" ]; then
   echo "  ▸ Logic App → Azure AI User (Foundry Agent)..."
@@ -437,6 +464,9 @@ echo "    → Storage Blob Data Contributor on $STORAGE_ACCOUNT"
 echo "    → Cosmos DB Built-in Data Contributor (00000000-0000-0000-0000-000000000002)"
 if [ -n "$CONTENT_UNDERSTANDING_RESOURCE_ID" ]; then
   echo "    → Cognitive Services User on Content Understanding resource"
+fi
+if [ -n "$DOC_INTELLIGENCE_RESOURCE_ID" ]; then
+  echo "    → Cognitive Services User on Document Intelligence resource (DNI extraction)"
 fi
 if [ -n "$FOUNDRY_RESOURCE_ID" ]; then
   echo "    → Azure AI User on Foundry project (email classification)"

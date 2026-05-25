@@ -19,6 +19,9 @@ STORAGE_ACCOUNT="${STORAGE_ACCOUNT:-emailanalyzerstor}"
 CONTENT_UNDERSTANDING_ENDPOINT="${CONTENT_UNDERSTANDING_ENDPOINT:-}"
 CONTENT_UNDERSTANDING_ANALYZER_ID="${CONTENT_UNDERSTANDING_ANALYZER_ID:-}"
 
+# Document Intelligence (optional — set if integrating DNI/ID document extraction)
+DOC_INTELLIGENCE_ENDPOINT="${DOC_INTELLIGENCE_ENDPOINT:-}"
+
 # Foundry Agent (project-level) (optional — set if integrating email classification)
 FOUNDRY_AGENT_ENDPOINT="${FOUNDRY_AGENT_ENDPOINT:-}"
 
@@ -32,6 +35,9 @@ echo "  Location:        $LOCATION"
 echo "  Logic App:       $LOGIC_APP (Consumption)"
 if [ -n "$FOUNDRY_AGENT_ENDPOINT" ]; then
   echo "  Foundry Agent (project-level): $FOUNDRY_AGENT_ENDPOINT"
+fi
+if [ -n "$DOC_INTELLIGENCE_ENDPOINT" ]; then
+  echo "  Doc Intelligence:              $DOC_INTELLIGENCE_ENDPOINT (prebuilt-idDocument)"
 fi
 echo ""
 
@@ -77,6 +83,12 @@ WORKFLOW_DEFINITION=$(echo "$WORKFLOW_DEFINITION" | sed "s/__STORAGE_ACCOUNT__/$
 # Replace Content Understanding placeholders (if configured)
 if [ -n "$CONTENT_UNDERSTANDING_ENDPOINT" ]; then
   WORKFLOW_DEFINITION=$(echo "$WORKFLOW_DEFINITION" | sed "s|__CONTENT_UNDERSTANDING_ENDPOINT__|$CONTENT_UNDERSTANDING_ENDPOINT|g; s/__CONTENT_UNDERSTANDING_ANALYZER_ID__/$CONTENT_UNDERSTANDING_ANALYZER_ID/g")
+fi
+
+# Replace Document Intelligence placeholders (if configured)
+if [ -n "$DOC_INTELLIGENCE_ENDPOINT" ]; then
+  DI_ENDPOINT_CLEAN="${DOC_INTELLIGENCE_ENDPOINT%/}"
+  WORKFLOW_DEFINITION=$(echo "$WORKFLOW_DEFINITION" | sed "s|__DOC_INTELLIGENCE_ENDPOINT__|$DI_ENDPOINT_CLEAN|g")
 fi
 
 # Replace Foundry Agent (project-level) placeholders (if configured)

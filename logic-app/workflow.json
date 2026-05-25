@@ -170,85 +170,182 @@
             ]
           },
           "actions": {
-            "Call_Content_Understanding_API": {
-              "type": "Http",
-              "inputs": {
-                "method": "POST",
-                "uri": "__CONTENT_UNDERSTANDING_ENDPOINT__/contentunderstanding/analyzers/__CONTENT_UNDERSTANDING_ANALYZER_ID__:analyze?api-version=2025-11-01",
-                "headers": {
-                  "Content-Type": "application/json"
-                },
-                "body": {
-                  "inputs": [
-                    {
-                      "data": "@{body('Get_Attachment_(V2)')?['contentBytes']}",
-                      "mimeType": "application/pdf"
-                    }
-                  ]
-                },
-                "authentication": {
-                  "type": "ManagedServiceIdentity",
-                  "audience": "https://cognitiveservices.azure.com/"
-                }
-              },
-              "operationOptions": "DisableAsyncPattern"
-            },
-            "Until_Analysis_Complete": {
-              "type": "Until",
-              "expression": "@equals(body('Poll_Analysis_Status')?['status'], 'Succeeded')",
-              "limit": {
-                "count": 60,
-                "timeout": "PT10M"
+            "Check_If_DNI": {
+              "type": "If",
+              "expression": {
+                "and": [
+                  {
+                    "contains": [
+                      "@toLower(body('Get_Attachment_(V2)')?['name'])",
+                      "dni"
+                    ]
+                  }
+                ]
               },
               "actions": {
-                "Poll_Analysis_Status": {
+                "Call_Doc_Intelligence_API": {
                   "type": "Http",
                   "inputs": {
-                    "method": "GET",
-                    "uri": "@{outputs('Call_Content_Understanding_API')['headers']['Operation-Location']}",
+                    "method": "POST",
+                    "uri": "__DOC_INTELLIGENCE_ENDPOINT__/documentintelligence/documentModels/prebuilt-idDocument:analyze?api-version=2024-11-30",
+                    "headers": {
+                      "Content-Type": "application/json"
+                    },
+                    "body": {
+                      "base64Source": "@{body('Get_Attachment_(V2)')?['contentBytes']}"
+                    },
                     "authentication": {
                       "type": "ManagedServiceIdentity",
                       "audience": "https://cognitiveservices.azure.com/"
                     }
-                  }
+                  },
+                  "operationOptions": "DisableAsyncPattern"
                 },
-                "Delay_Between_Polls": {
-                  "type": "Wait",
-                  "inputs": {
-                    "interval": {
-                      "count": 5,
-                      "unit": "Second"
+                "Until_DI_Analysis_Complete": {
+                  "type": "Until",
+                  "expression": "@or(equals(toLower(coalesce(body('Poll_DI_Analysis_Status')?['status'], '')), 'succeeded'), equals(toLower(coalesce(body('Poll_DI_Analysis_Status')?['status'], '')), 'failed'))",
+                  "limit": {
+                    "count": 60,
+                    "timeout": "PT10M"
+                  },
+                  "actions": {
+                    "Poll_DI_Analysis_Status": {
+                      "type": "Http",
+                      "inputs": {
+                        "method": "GET",
+                        "uri": "@{outputs('Call_Doc_Intelligence_API')['headers']['Operation-Location']}",
+                        "authentication": {
+                          "type": "ManagedServiceIdentity",
+                          "audience": "https://cognitiveservices.azure.com/"
+                        }
+                      }
+                    },
+                    "Delay_Between_DI_Polls": {
+                      "type": "Wait",
+                      "inputs": {
+                        "interval": {
+                          "count": 5,
+                          "unit": "Second"
+                        }
+                      },
+                      "runAfter": {
+                        "Poll_DI_Analysis_Status": [
+                          "Succeeded"
+                        ]
+                      }
                     }
                   },
                   "runAfter": {
-                    "Poll_Analysis_Status": [
+                    "Call_Doc_Intelligence_API": [
+                      "Succeeded"
+                    ]
+                  }
+                },
+                "Append_DNI_Attachment_With_Analysis": {
+                  "type": "AppendToArrayVariable",
+                  "inputs": {
+                    "name": "attachments",
+                    "value": {
+                      "name": "@body('Get_Attachment_(V2)')?['name']",
+                      "contentType": "@body('Get_Attachment_(V2)')?['contentType']",
+                      "size": "@body('Get_Attachment_(V2)')?['size']",
+                      "blobPath": "email-attachments/@{encodeURIComponent(triggerBody()?['id'])}/@{body('Get_Attachment_(V2)')?['name']}",
+                      "analysisType": "documentIntelligence",
+                      "documentIntelligence": "@body('Poll_DI_Analysis_Status')"
+                    }
+                  },
+                  "runAfter": {
+                    "Until_DI_Analysis_Complete": [
                       "Succeeded"
                     ]
                   }
                 }
               },
-              "runAfter": {
-                "Call_Content_Understanding_API": [
-                  "Succeeded"
-                ]
-              }
-            },
-            "Append_PDF_Attachment_With_Analysis": {
-              "type": "AppendToArrayVariable",
-              "inputs": {
-                "name": "attachments",
-                "value": {
-                  "name": "@body('Get_Attachment_(V2)')?['name']",
-                  "contentType": "@body('Get_Attachment_(V2)')?['contentType']",
-                  "size": "@body('Get_Attachment_(V2)')?['size']",
-                  "blobPath": "email-attachments/@{encodeURIComponent(triggerBody()?['id'])}/@{body('Get_Attachment_(V2)')?['name']}",
-                  "contentUnderstanding": "@body('Poll_Analysis_Status')"
+              "else": {
+                "actions": {
+                  "Call_Content_Understanding_API": {
+                    "type": "Http",
+                    "inputs": {
+                      "method": "POST",
+                      "uri": "__CONTENT_UNDERSTANDING_ENDPOINT__/contentunderstanding/analyzers/__CONTENT_UNDERSTANDING_ANALYZER_ID__:analyze?api-version=2025-11-01",
+                      "headers": {
+                        "Content-Type": "application/json"
+                      },
+                      "body": {
+                        "inputs": [
+                          {
+                            "data": "@{body('Get_Attachment_(V2)')?['contentBytes']}",
+                            "mimeType": "application/pdf"
+                          }
+                        ]
+                      },
+                      "authentication": {
+                        "type": "ManagedServiceIdentity",
+                        "audience": "https://cognitiveservices.azure.com/"
+                      }
+                    },
+                    "operationOptions": "DisableAsyncPattern"
+                  },
+                  "Until_Analysis_Complete": {
+                    "type": "Until",
+                    "expression": "@equals(body('Poll_Analysis_Status')?['status'], 'Succeeded')",
+                    "limit": {
+                      "count": 60,
+                      "timeout": "PT10M"
+                    },
+                    "actions": {
+                      "Poll_Analysis_Status": {
+                        "type": "Http",
+                        "inputs": {
+                          "method": "GET",
+                          "uri": "@{outputs('Call_Content_Understanding_API')['headers']['Operation-Location']}",
+                          "authentication": {
+                            "type": "ManagedServiceIdentity",
+                            "audience": "https://cognitiveservices.azure.com/"
+                          }
+                        }
+                      },
+                      "Delay_Between_Polls": {
+                        "type": "Wait",
+                        "inputs": {
+                          "interval": {
+                            "count": 5,
+                            "unit": "Second"
+                          }
+                        },
+                        "runAfter": {
+                          "Poll_Analysis_Status": [
+                            "Succeeded"
+                          ]
+                        }
+                      }
+                    },
+                    "runAfter": {
+                      "Call_Content_Understanding_API": [
+                        "Succeeded"
+                      ]
+                    }
+                  },
+                  "Append_PDF_Attachment_With_Analysis": {
+                    "type": "AppendToArrayVariable",
+                    "inputs": {
+                      "name": "attachments",
+                      "value": {
+                        "name": "@body('Get_Attachment_(V2)')?['name']",
+                        "contentType": "@body('Get_Attachment_(V2)')?['contentType']",
+                        "size": "@body('Get_Attachment_(V2)')?['size']",
+                        "blobPath": "email-attachments/@{encodeURIComponent(triggerBody()?['id'])}/@{body('Get_Attachment_(V2)')?['name']}",
+                        "analysisType": "contentUnderstanding",
+                        "contentUnderstanding": "@body('Poll_Analysis_Status')"
+                      }
+                    },
+                    "runAfter": {
+                      "Until_Analysis_Complete": [
+                        "Succeeded"
+                      ]
+                    }
+                  }
                 }
-              },
-              "runAfter": {
-                "Until_Analysis_Complete": [
-                  "Succeeded"
-                ]
               }
             }
           },

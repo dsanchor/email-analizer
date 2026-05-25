@@ -2,6 +2,7 @@ import { useState, useEffect } from "react";
 import { useParams, Link, useSearchParams } from "react-router-dom";
 import DOMPurify from "dompurify";
 import ContentUnderstandingViewer from "../components/ContentUnderstandingViewer";
+import DocumentIntelligenceViewer from "../components/DocumentIntelligenceViewer";
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -359,9 +360,11 @@ export default function EmailDetail() {
                     </span>
                     <span className="attachment__download">Download</span>
                   </a>
-                  {att.contentUnderstanding && (
+                  {att.documentIntelligence ? (
+                    <DocumentIntelligenceViewer data={att.documentIntelligence} />
+                  ) : att.contentUnderstanding ? (
                     <ContentUnderstandingViewer data={att.contentUnderstanding} />
-                  )}
+                  ) : null}
                 </div>
               ))}
             </div>
