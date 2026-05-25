@@ -732,6 +732,531 @@ Created `foundry-agent/publish_agent.sh` — a bash script that uses ARM REST AP
 - `foundry-agent/publish_agent.sh` — new publishing script
 
 ---
+---
+
+### Azure Function Infrastructure — Ripley
+
+**Date:** 2025-01-20 | **Status:** Implemented
+
+#### Decision: Cosmos DB Change Feed Processing with Python Azure Function
+
+After the Logic App classifies emails, a separate Azure Function processes post-classification actions via Cosmos DB change feed trigger. Function runs on App Service Plan B1 (Linux, Python) with managed identity.
+
+#### Key Rationale
+- **Separation of concerns:** Logic App handles email intake; Function handles agent processing
+- **Event-driven:** Change feed provides at-least-once delivery with lease checkpointing
+- **Scalability:** Automatic trigger scaling based on partition throughput
+- **Cost-effective:** B1 plan ($13/month) more suitable than Consumption for always-on change feed processing
+
+#### Implementation Details
+- **Storage:** Dedicated account `emailanalyzerfuncstor` with public network access enabled (required by Function runtime)
+- **Trigger:** Cosmos DB change feed on `emails` container with `leases` checkpoint container
+- **Managed Identity:** System-assigned, with `Cosmos DB Built-in Data Contributor` role
+- **App Settings:** `COSMOS_ENDPOINT`, `COSMOS_DATABASE`, `COSMOS_CONTAINER`, `AzureWebJobsStorage`
+- **Processing:** Append status "Processed by agent" and `agentResult` field to document
+
+#### Files Modified
+- `azure-function/function_app.py`
+- `azure-function/host.json`
+- `azure-function/requirements.txt`
+- `infrastructure/deploy-azure-function.sh`
+
+---
+
+### Function App Hosting Plan — Ripley
+
+**Date:** 2025-07-14 | **Status:** Implemented
+
+#### Decision: Switch from Consumption to App Service Plan B1
+
+Root cause: Azure Policy enforces `allowSharedKeyAccess=false`, but Consumption plan REQUIRES file shares created via shared keys. This is a hard platform constraint that cannot be worked around.
+
+**Solution:** Use App Service Plan B1 (Linux) instead. B1 stores function code on the local VM filesystem, completely bypassing the file share requirement.
+
+| | Consumption | App Service Plan B1 |
+|---|---|---|
+| **Cost** | Pay-per-execution | ~$13/month (always-on) |
+| **File shares** | Required (shared keys) | Not required |
+| **Scale** | Auto (0→N) | Manual (1 instance) |
+| **Cold start** | Yes | No (always warm) |
+
+For this workload, B1 is actually preferable — always-on means no cold starts and faster email processing.
+
+#### Impact
+- `infrastructure/deploy-azure-function.sh` — modified
+- New resource: App Service Plan `email-analyzer-func-plan`
+- No changes to function code or RBAC assignments
+
+---
+
+### Storage Account Public Network Access — Ripley
+
+**Date:** 2025-07-25 | **Status:** Implemented
+
+#### Decision: Explicitly set public network access on Function App storage account
+
+The Function App `email-analyzer-func` became unhealthy because storage account `emailanalyzerfuncstor` had public network access disabled. The Function App has no VNet integration or private endpoints and relies on public network access to reach `AzureWebJobsStorage`. Without it, the runtime cannot manage triggers or lease blobs, causing `AuthorizationFailure`.
+
+**Solution:** Add `--public-network-access Enabled` to storage account creation in deploy script. This makes the setting explicit rather than relying on Azure subscription defaults, which can be overridden by Azure Policy.
+
+#### Alternatives Considered
+1. **VNet integration + private endpoints** — More secure but significantly more complex and costly
+2. **Leave it implicit and fix manually** — Fragile; same issue recurs on every fresh deployment if subscription policy changes
+
+#### Consequences
+- Future deployments will reliably create storage with public access enabled
+- If project later adopts VNet integration, this flag should be revisited and set to `Disabled` once private endpoints are in place
+
+#### Files Modified
+- `infrastructure/deploy-azure-function.sh`
+
+---
+
+### Classification Output Filtering — Ripley
+
+**Date:** 2025-07-25 | **Status:** Implemented
+
+#### Decision: Add Filter_Array for Classification Output Parsing
+
+**Problem:** `Parse_Classification` used hardcoded `[1]` index to access Foundry agent response output array. Output array contains elements of different types (`reasoning`, `message`) whose order is not guaranteed by the API.
+
+**Solution:** Added `Filter_Classification_Output` action (Logic App `Query` type) between `Classify_Email` and `Parse_Classification`:
+- Filters output for items where `type` equals `"message"`
+- `Parse_Classification` now reads `first(body('Filter_Classification_Output'))?['content'][0]?['text']`
+
+#### Rationale
+- **Resilience:** Output element order may change between API versions
+- **Correctness:** Filtering by type is semantically correct; indexing by position is fragile
+- **Pattern consistency:** Recommended approach for any multi-element API response parsing in Logic Apps
+
+#### Impact
+- No downstream changes — `Parse_Classification` output shape is identical
+- No deploy script changes — no new placeholders introduced
+
+#### Files Modified
+- `logic-app/workflow.json` — added `Filter_Classification_Output`, updated `Parse_Classification`
+
+---
+
+### Container App Cosmos DB Role Upgrade — Ripley
+
+**Date:** 2025-07-21 | **Status:** Approved
+
+#### Decision: Upgrade Container App Cosmos DB role to Data Contributor
+
+**Context:** Web app's `DELETE /api/emails/:id` endpoint needs delete permissions. Container App's managed identity was assigned `Cosmos DB Built-in Data Reader` (read-only), causing 403 RBAC errors on deletes.
+
+**Solution:** Upgrade Container App's Cosmos DB role from **Data Reader** to **Data Contributor** (00000000-0000-0000-0000-000000000002). Contributor role includes read, create, replace, and delete — all operations needed for full CRUD.
+
+#### Impact
+- `infrastructure/deploy.sh` — role assignment changed from Reader to Contributor
+- `README.md` — security table updated
+- `docs/architecture.md` — role table updated
+- Managed Identity Roles table in `.squad/decisions.md` — updated
+
+#### Migration Note for Existing Deployments
+If infrastructure was already deployed with the Reader role, manually reassign:
+```bash
+# Find assignment ID
+az cosmosdb sql role assignment list --account-name <cosmos-account> --resource-group <rg> \
+  --query "[?principalId=='<container-app-principal-id>']"
+
+# Then re-run deploy.sh to create Contributor assignment
+```
+
+---
+
+### Key Vault Integration — Ripley
+
+**Date:** 2025-07-XX | **Status:** Implemented
+
+#### Decision: Add Key Vault integration pattern for Logic App
+
+**Pattern:**
+- Standalone `infrastructure/deploy-keyvault.sh` for KV provisioning (independent lifecycle)
+- RBAC authorization (not legacy access policies) — aligns with zero-access-key security model
+- `keyvault` API connection using managed identity auth pattern
+- `Get_Secret` action placed early in workflow (after variable init, before first Cosmos write)
+- Secret name uses `__KEY_VAULT_SECRET_NAME__` placeholder (consistent with existing `__STORAGE_ACCOUNT__`, `__COSMOS_ACCOUNT__` pattern)
+
+#### Impact
+- **deploy.sh:** Provisions keyvault API connection + includes in $connections + access policy loop
+- **redeploy-logic-app.sh:** Includes keyvault in $connections payload + sed replacement
+- **workflow.json:** New Get_Secret action in the action chain
+- **connections.json:** Reference entry added
+
+#### Team Notes
+- Lambert: No UI changes needed
+- Kane: Workflow chain changed — Get_Secret now between Initialize_Status_History and Create_Initial_Cosmos_Document
+- All: `KEY_VAULT_SECRET_NAME` env var required for deploy/redeploy scripts
+
+---
+
+### Mortgage Inquiry Classification Category — Ripley
+
+**Date:** 2025-01-15 | **Status:** Implemented
+
+#### Decision: Add `mortgage_inquiry` Classification Category
+
+**Context:** Feature request from dsanchor to expand EmailClassifierAgent classification scope
+
+**Changes:**
+- Added category `mortgage_inquiry` in `foundry-agent/create_classifier_agent.py` (line 46-47)
+- Placed logically after `sales_inquiry` (both are product interest categories)
+- Description covers: customer interest in mortgages, inquiries about rates/terms/conditions, requirements, product applications
+
+#### Design Rationale
+- **Logical placement:** Grouped with `sales_inquiry` (both represent customer product interest)
+- **Confidence score:** Example (96) reflects unambiguous language — helps validate agent scoring calibration
+- **No downstream changes:** Classification data flows to Cosmos DB and web UI unchanged
+- **Consistency:** Follows existing pattern; now 14 categories (increased from 13)
+
+#### Testing
+- Manual: Create test email with mortgage interest keywords, verify classification as `mortgage_inquiry`
+- Automated: No test suite exists for classification instructions (future work)
+
+#### Deployment
+No special steps. Next run of `create_classifier_agent.py` will provision agent with new category.
+
+---
+
+### Personal Information Validation Agent — Ripley
+
+**Date:** 2025-04-27 | **Status:** Implemented
+
+#### Decision: PersonalInformationValidationAgent Architecture
+
+**Context:** System needed a second agent to validate personal documents (IRPF and Vida Laboral) extracted from email attachments. Azure Function was using mock validation data and needed real agent-based validation.
+
+#### Architecture Decisions
+
+1. **Separate Agent vs. Single Multi-Purpose Agent**
+   - Chosen: Separate specialized agent for validation
+   - Rationale: Classification and validation are distinct concerns; allows independent evolution and versioning
+
+2. **Invocation Method: Responses API vs. Direct Agent SDK**
+   - Chosen: Responses API (stateless HTTP calls)
+   - Rationale: Consistent with Logic App's invocation pattern; simpler error handling for serverless functions
+
+3. **Authentication: Managed Identity vs. API Keys**
+   - Chosen: Managed Identity with `https://ai.azure.com` audience
+   - Rationale: Zero secrets; consistent with Cosmos DB access pattern; automatic token rotation
+
+4. **Agent Input Format**
+   - Chosen: JSON string containing document data
+   - Rationale: Preserves structure; easier to extend; more robust than text parsing
+
+5. **Error Handling**
+   - Chosen: Always return structured agentResult, include error in result if agent fails
+   - Rationale: Downstream systems expect consistent structure; failures visible in UI rather than silently lost
+
+#### Validation Rules
+The agent validates 4 business rules:
+1. **Required Documents** — Both IRPF and Vida Laboral must be present
+2. **Name Consistency** — Full name must match across both documents
+3. **Bank Account & CSV** — IBAN and CSV code must be in IRPF
+4. **CEA Code Consistency** — CEA code must be same across all Vida Laboral pages
+
+Each rule returns `{"rule": "...", "status": "pass|fail", "detail": "..."}`.
+
+#### Configuration
+- `FOUNDRY_AGENT_ENDPOINT` — Base endpoint
+- `VALIDATION_AGENT_APP_NAME` — Application name (default: `personal-info-validator`)
+
+#### Alternatives Considered
+1. **Extend EmailClassifierAgent** — Violates single responsibility; makes prompt bloated
+2. **Use Azure OpenAI directly** — Loses Foundry versioning and monitoring features
+3. **Process in Logic App instead of Function** — Logic App already handles classification; keeps concerns separated
+4. **Store validation rules in code/config** — Business logic better captured by LLM; easier to update
+
+#### Positive Consequences
+- Clean separation between classification and validation agents
+- Easy to add more agents following the same pattern
+- Consistent authentication across all agents
+- Validation logic centralized in agent instructions
+
+#### Negative Consequences
+- Two agent deployments to manage
+- Additional Foundry costs for validation calls
+- Network latency for agent API calls
+
+#### Files Modified
+- `foundry-agent/create_validation_agent.py` — Agent creation script
+- `azure-function/function_app.py` — Updated with agent invocation logic
+- `infrastructure/deploy-azure-function.sh` — Added env vars to function app settings
+
+---
+
+### Validation Agent Rules Refinement — Ripley
+
+**Date:** 2025-07-25 | **Status:** Implemented
+
+#### Decision: Split Bank Account & CSV Rules and Fix Name Order Matching
+
+**Context:** PersonalInformationValidationAgent had issues:
+- Rule 3 combined bank account and CSV validation, making it hard to distinguish which check failed
+- Rule 2 used exact string matching, failed when documents listed names in different order (common in Spanish official documents)
+
+#### Decisions
+
+1. **Split Bank Account & CSV into Separate Rules**
+   - Rule 3 — Bank Account from IRPF (5 IBAN components only)
+   - Rule 4 — CSV Code from IRPF (standalone)
+   - Rule 5 — CEA Code Consistency (renumbered from old Rule 4)
+   - Agent now returns 5 statements instead of 4
+
+2. **Order-Independent Name Matching**
+   - Rule 2 now extracts individual name parts and compares as a SET
+   - Handles "García López, Juan" vs "Juan García López" transparently
+   - Ignores order, punctuation, and separators
+
+#### Impact
+- **Lambert/Kane:** `agentResult.statements` array now has 5 items instead of 4. UI and tests should handle gracefully (array-based rendering should work without changes).
+- **Ripley:** Agent must be re-provisioned (`python create_validation_agent.py`) and re-published to pick up new prompt
+
+#### Files Modified
+- `foundry-agent/create_validation_agent.py`
+
+---
+
+### Agent Result Display — Lambert
+
+**Date:** 2025-07-27 | **Status:** Implemented
+
+#### Decision: Add Agent Result Section in Email Detail
+
+**What:** Added new "Agent Result" section to email detail page (`EmailDetail.jsx`) that displays validation/result information from the `agentResult` field in Cosmos DB document.
+
+#### Implementation Details
+
+**Component Changes (`EmailDetail.jsx`):**
+- Conditional rendering checking for `email.agentResult` with non-empty `statements` array
+- Renders **before** the Classification section
+- Displays:
+  - `agentResult.title` as an h2 section heading
+  - `agentResult.statements` as a styled list with checkmark bullets
+- Completely hidden if `agentResult` is absent, null, or has empty statements array
+
+**Styling (`App.css`):**
+- `.detail__agent-result` — Container with 32px bottom margin
+- `.detail__agent-result-title` — Heading using SF Pro Display, 21px, 600 weight
+- `.detail__agent-result-body` — White background card with 8px rounded corners
+- `.agent-result-list` — Flexbox column with 10px gaps
+- `.agent-result-list__item` — Text with 20px left padding for checkmark bullets
+- `.agent-result-list__item::before` — Blue checkmark (✓) positioned absolutely
+
+All styles follow existing Apple-inspired design patterns and CSS variable system.
+
+#### Example Output
+Given:
+```json
+{
+  "agentResult": {
+    "title": "Validation",
+    "statements": ["DNIs match", "Birthday match", "Same name and surname"]
+  }
+}
+```
+
+Renders: Heading "Validation" with three items prefixed with blue checkmarks.
+
+#### Testing
+- Follows existing component patterns: conditional rendering safety, .map() with index keys, no external dependencies
+- Compatible with existing CSS variable system
+
+#### Files Modified
+- `web-app/src/pages/EmailDetail.jsx`
+- `web-app/src/App.css`
+
+---
+
+### Draggable Column Resizing — Lambert
+
+**Date:** 2025-07-27 | **Status:** Implemented
+
+#### Decision: Add Column Width Resizing to Email Table
+
+**Context:** Column widths were hardcoded in CSS. Commit af98f15 narrowed them too aggressively (Subject at 500px fixed). Users need ability to adjust widths.
+
+#### Implementation
+
+1. **Reverted** column width CSS to original values (date: 180px, from: 220px, subject: auto on desktop)
+2. **Added drag-to-resize handles** on each table header column
+   - Thin invisible handle on right edge of each `<th>`
+   - Click-drag resizing with user-set widths stored in React state
+   - Applied as inline styles, overriding CSS defaults
+
+#### Rationale
+- Hardcoded widths can't anticipate all content lengths
+- Drag-to-resize is a standard desktop UX pattern users understand
+- No external libraries — pure mousedown/mousemove/mouseup with React state
+- Handle styling minimal: invisible by default, Apple Blue indicator on hover/active
+
+#### Technical Details
+- **CSS:** `.resize-handle` positioned absolute right, 6px hit area, `::after` for 2px blue indicator line
+- **React:** `colWidths` state object, `handleResizeStart` callback with document-level event listeners, `useRef` for tracking active drag
+- **Min width:** 50px prevents columns from collapsing
+
+#### Impact
+- Kane: No test changes needed — resize is visual interaction only
+- Ripley: No infrastructure changes
+- Build: Verified — `npm run build` passes
+
+#### Files Modified
+- `web-app/src/App.css` — column width revert + resize handle styles
+- `web-app/src/pages/EmailList.jsx` — resize state and handlers
+
+---
+
+### Azure Function Documentation — Dallas
+
+**Date:** 2024 | **Status:** Complete
+
+#### Decision: Add Comprehensive Documentation for Optional Azure Function
+
+Added comprehensive documentation for the optional Azure Function (Cosmos DB change feed processor) across project documentation suite.
+
+#### What Was Documented
+
+1. **README.md** — New Optional Feature Section
+   - Section 3: "Azure Function — Cosmos DB Change Feed Processor (Optional)"
+   - Included: what it does, prerequisites, deployment command, environment variables, monitoring
+   - Marked as OPTIONAL, following same style as Content Understanding
+   - Updated architecture diagram to show Function's optional connection to Cosmos DB
+   - Updated Security table to include Function MI → Cosmos DB Data Contributor role
+   - Updated Project Structure to include `azure-function/` directory
+
+2. **docs/architecture.md** — Detailed Architecture Documentation
+   - Updated Solution Overview diagram to show Function reading from Cosmos DB change feed
+   - Updated Component Interaction Flow (steps 1-8 → 1-9) to include Function processing as step 6
+   - Updated Managed Identity Roles: added new "Azure Function (System-Assigned Managed Identity, Optional)" section
+   - Updated Deployment Architecture to mention `deploy-azure-function.sh` as optional step
+   - Updated Project Structure to include `azure-function/` directory with all files
+
+#### Documentation Style Consistency
+
+All new documentation follows existing patterns:
+- **Consistency with Content Understanding section:** Marked as optional; includes prerequisites, setup steps, environment variables
+- **Table formatting:** Matches existing README tables for environment variables and roles
+- **Tone:** Professional, clear, action-oriented; emphasizes zero-connection-string security model
+- **Links:** References back to `azure-function/README.md` for detailed function-specific docs
+
+#### Key Design Decisions
+
+1. **Optional Feature Positioning:** Placed in same tier as Content Understanding and Foundry Agent
+2. **Security Table Addition:** Function MI role only appears in Security table, reinforcing that Function is optional
+3. **Architecture Diagram Update:** Used (optional) label and separate arrow path
+4. **Deployment Script Location:** `infrastructure/deploy-azure-function.sh` (separate from main `deploy.sh`) allows deploying core first, then optionally add Function
+
+#### Files Modified
+- `README.md` — Added section, updated diagram, updated security table, updated project structure
+- `docs/architecture.md` — Updated diagrams, flow, roles, deployment pipeline, project structure
+
+---
+
+### Validation Agent Integration Documentation — Dallas
+
+**Date:** 2025-01-25 | **Status:** Documented
+
+#### Decision: Document Validation Agent Integration with Azure Function
+
+Azure Function's change feed processor originally used **mock validation data**. This has been replaced with a **real Azure AI Foundry agent** (`PersonalInformationValidationAgent`) that validates email documents against 4 business rules.
+
+#### Changes Made
+
+1. **New Foundry Agent: `PersonalInformationValidationAgent`**
+   - Purpose: Validates documents against 4 business rules
+   - Location: Azure AI Foundry project (provisioned by `foundry-agent/create_validation_agent.py`)
+   - Invocation: Responses API (same pattern as classifier agent)
+   - Auth: Managed identity with audience `https://ai.azure.com/.default`
+
+2. **Azure Function Integration** (`azure-function/function_app.py`)
+   - Function calls `call_validation_agent()` when document reaches "Email classified" status
+   - Uses `urllib.request` + `DefaultAzureCredential` (no external HTTP libs)
+   - Responses API URL: `{FOUNDRY_AGENT_ENDPOINT}/openai/responses?api-version=2025-11-15-preview`
+   - Agent reference: `{"agent": {"name": "PersonalInformationValidationAgent", "type": "agent_reference"}}`
+   - Error handling: Status "Processed by agent" if succeeds; "Agent processing failed" if error
+   - Idempotency: Skips if "Processed by agent" already in statusHistory
+
+3. **New Result Format**
+   ```json
+   {
+     "title": "Validation",
+     "statements": [
+       {
+         "rule": "Required Documents",
+         "status": "pass",
+         "detail": "All required documents are present"
+       },
+       {
+         "rule": "Name Consistency",
+         "status": "pass",
+         "detail": "Customer name matches across all documents"
+       },
+       {
+         "rule": "Bank Account & CSV",
+         "status": "fail",
+         "detail": "Bank account format invalid in CSV file"
+       },
+       {
+         "rule": "CEA Code Consistency",
+         "status": "pass",
+         "detail": "CEA code consistent throughout submission"
+       }
+     ]
+   }
+   ```
+
+4. **Environment Variables**
+   | Variable | Description |
+   |----------|-------------|
+   | `FOUNDRY_AGENT_ENDPOINT` | Azure AI Foundry project endpoint |
+   | `VALIDATION_AGENT_NAME` | Agent name (default: `PersonalInformationValidationAgent`) |
+
+5. **Managed Identity Permissions**
+   - Azure Function requires: `Cosmos DB Built-in Data Contributor` (existing)
+   - New: `Azure AI User` on Azure AI Foundry project
+
+#### Documentation Updates
+
+1. **`azure-function/README.md`**
+   - Function Behavior describes calling real validation agent
+   - Agent Result Format shows new object-based statements
+   - Environment Variables include Foundry endpoint and agent name
+   - Authentication section mentions Foundry access requirement
+   - Local development section includes new env vars
+
+2. **`README.md` (root)**
+   - Section 1: Email Classification Agent setup
+   - Section 2: Validation Agent setup (new, optional for change feed)
+   - Section 3: Content Understanding (unchanged)
+   - Section 4: Azure Function (updated for real agent)
+   - Security table adds: Azure Function → Foundry AI project → Azure AI User
+   - Project Structure includes `create_validation_agent.py`
+
+3. **`docs/architecture.md`**
+   - Component Interaction Flow step 6: calls real agent instead of mock
+   - Email Document Schema: includes `agentResult` with structured statements
+   - Design Decisions: updated for `statusHistory`, `agentResult` with structured format
+   - Managed Identity Roles: Azure Function → Foundry AI project → Azure AI User
+   - Project Structure: includes validation agent provisioning script
+
+#### Rationale
+
+1. **Real validation:** Agent applies business logic, not mock data
+2. **Audit trail:** `statusHistory` tracks processing pipeline state with timestamps
+3. **Structured results:** Each statement includes rule name, status, and detail for programmatic processing
+4. **Consistency:** Validation agent follows same Responses API pattern as classifier agent
+5. **Managed identity:** Zero secrets, consistent with project security model
+
+#### Impact
+
+- **Logic App:** No changes — still provides document data to function
+- **Web App:** Can now display structured validation results
+- **Testing:** Function tests should reflect new agent response format
+- **Deployment:** `deploy-azure-function.sh` must assign Azure AI User role to function MI
+
+---
 
 ## Governance
 
